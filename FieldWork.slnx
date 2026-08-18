@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="FieldWork.Api/FieldWork.Api.csproj" />
+  <Project Path="FieldWork.Application/FieldWork.Application.csproj" />
+  <Project Path="FieldWork.Domain/FieldWork.Domain.csproj" />
+  <Project Path="FieldWork.Infrastructure/FieldWork.Infrastructure.csproj" />
+  <Project Path="FieldWork.Tests/FieldWork.Tests.csproj" />
+</Solution>

@@ -1,0 +1,22 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# .NET
+bin/
+obj/
+
+# Test results
+TestResults/
+
+# Development configuration
+FieldWork.Api/appsettings.Development.json
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
