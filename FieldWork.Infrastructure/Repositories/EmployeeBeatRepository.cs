@@ -16,16 +16,19 @@ public class EmployeeBeatRepository : IEmployeeBeatRepository
         _db = db;
     }
 
-    public async Task<EmployeeBeatResponse> CreateAsync(
-        CreateEmployeeBeatRequest request,
-        CancellationToken cancellationToken = default)
+
+public async Task<EmployeeBeatResponse> CreateAsync(
+    Guid employeeId,
+    Guid beatId,
+    DateTimeOffset assignedFrom,
+    CancellationToken cancellationToken = default)
     {
         var employeeBeat = new EmployeeBeat
         {
             Id = Guid.NewGuid(),
-            EmployeeId = request.EmployeeId,
-            BeatId = request.BeatId,
-            AssignedFrom = request.AssignedFrom,
+            EmployeeId = employeeId,
+            BeatId = beatId,
+            AssignedFrom = assignedFrom,
             AssignedTo = null,
             IsActive = true
         };
@@ -44,6 +47,8 @@ public class EmployeeBeatRepository : IEmployeeBeatRepository
             IsActive = employeeBeat.IsActive
         };
     }
+
+
 
     public async Task<IReadOnlyList<EmployeeBeatResponse>> GetAllAsync(
     Guid tenantId,

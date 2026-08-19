@@ -6,6 +6,7 @@ using FieldWork.Application.Security;
 
 namespace FieldWork.Application.Services;
 
+
 public class EmployeeBeatService : IEmployeeBeatService
 {
     private readonly IEmployeeBeatRepository _repository;
@@ -50,9 +51,10 @@ public class EmployeeBeatService : IEmployeeBeatService
         }
 
         // 3. Employee can only have one active beat
-        var hasActiveAssignment = await _repository.HasActiveAssignmentAsync(
-            request.EmployeeId,
-            cancellationToken);
+        var hasActiveAssignment =
+            await _repository.HasActiveAssignmentAsync(
+                request.EmployeeId,
+                cancellationToken);
 
         if (hasActiveAssignment)
         {
@@ -60,20 +62,26 @@ public class EmployeeBeatService : IEmployeeBeatService
                 "Employee already has an active beat.");
         }
 
-        // 4. All business rules passed
+        // 4. Server controls the assignment timestamp
+        var assignedFrom = DateTimeOffset.UtcNow;
+
         return await _repository.CreateAsync(
-            request,
+            request.EmployeeId,
+            request.BeatId,
+            assignedFrom,
             cancellationToken);
     }
 
     public async Task<IReadOnlyList<EmployeeBeatResponse>> GetAllAsync(
-    CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         return await _repository.GetAllAsync(
             _currentUser.TenantId,
             cancellationToken);
     }
 }
+
+
 
 
 

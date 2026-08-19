@@ -7,6 +7,6 @@ public class CreateEmployeeBeatRequest
 
     public Guid BeatId { get; set; }
 
-    public DateTimeOffset AssignedFrom { get; set; }
+   // public DateTimeOffset AssignedFrom { get; set; }
 }
 
