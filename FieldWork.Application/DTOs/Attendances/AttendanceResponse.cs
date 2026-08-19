@@ -1,0 +1,32 @@
+﻿namespace FieldWork.Application.DTOs.Attendances;
+
+public class AttendanceResponse
+{
+    public Guid Id { get; set; }
+
+    public Guid EmployeeId { get; set; }
+
+    public Guid? BeatId { get; set; }
+
+    public string ClientAttendanceId { get; set; } = string.Empty;
+
+    public string Action { get; set; } = string.Empty;
+
+    public DateTimeOffset RecordedAt { get; set; }
+
+    public DateTimeOffset ReceivedAt { get; set; }
+
+    public decimal Latitude { get; set; }
+
+    public decimal Longitude { get; set; }
+
+    public decimal? AccuracyMeters { get; set; }
+
+    public string Source { get; set; } = string.Empty;
+
+    public string SyncStatus { get; set; } = string.Empty;
+
+    public bool IsWithinGeofence { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+}

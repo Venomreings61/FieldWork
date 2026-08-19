@@ -13,5 +13,7 @@ public interface IBeatRepository
         Guid beatId,
         Guid tenantId,
         CancellationToken cancellationToken = default);
+
+    
 }
 

@@ -16,6 +16,10 @@ Task<EmployeeBeatResponse> CreateAsync(
         Guid tenantId,
         CancellationToken cancellationToken = default);
 
+    Task<EmployeeBeatResponse?> GetActiveByEmployeeAsync(
+    Guid employeeId,
+    CancellationToken cancellationToken = default);
+
     Task<bool> EmployeeExistsAsync(
         Guid employeeId,
         Guid tenantId,

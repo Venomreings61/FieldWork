@@ -59,4 +59,27 @@ public class EmployeeRepository : IEmployeeRepository
             })
             .FirstOrDefaultAsync(cancellationToken);
     }
+
+    public async Task<EmployeeResponse?> GetByUserIdAsync(
+    Guid userId,
+    Guid tenantId,
+    CancellationToken cancellationToken = default)
+    {
+        return await _db.Employees
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == userId &&
+                x.User.TenantId == tenantId)
+            .Select(x => new EmployeeResponse
+            {
+                Id = x.Id,
+                EmployeeCode = x.EmployeeCode,
+                FirstName = x.FirstName,
+                LastName = x.LastName,
+                PhoneNumber = x.PhoneNumber,
+                IsActive = x.IsActive,
+                Username = x.User.Username
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 }

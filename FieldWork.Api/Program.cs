@@ -57,6 +57,13 @@ builder.Services.AddScoped<IEmployeeService,EmployeeService>();
 
 builder.Services.AddScoped<IBeatService, BeatService>();
 
+builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+
+builder.Services.AddScoped<IAttendanceService, AttendanceService>();
+
+builder.Services.AddScoped<IGeofenceService, GeofenceService>();
+
+
 
 
 var jwtSettings = builder.Configuration

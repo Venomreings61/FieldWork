@@ -37,9 +37,9 @@ public class BeatRepository : IBeatRepository
     }
 
     public async Task<BeatResponse?> GetByIdAsync(
-        Guid beatId,
-        Guid tenantId,
-        CancellationToken cancellationToken = default)
+     Guid beatId,
+     Guid tenantId,
+     CancellationToken cancellationToken = default)
     {
         return await _db.Beats
             .AsNoTracking()

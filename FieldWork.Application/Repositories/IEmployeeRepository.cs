@@ -13,5 +13,12 @@ public interface IEmployeeRepository
         Guid employeeId,
         Guid tenantId,
         CancellationToken cancellationToken = default);
+
+    Task<EmployeeResponse?> GetByUserIdAsync(
+    Guid userId,
+    Guid tenantId,
+    CancellationToken cancellationToken = default);
 }
+
+
 

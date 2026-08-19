@@ -48,6 +48,26 @@ public async Task<EmployeeBeatResponse> CreateAsync(
         };
     }
 
+    public async Task<EmployeeBeatResponse?> GetActiveByEmployeeAsync(
+    Guid employeeId,
+    CancellationToken cancellationToken = default)
+    {
+        return await _db.EmployeeBeats
+            .AsNoTracking()
+            .Where(x =>
+                x.EmployeeId == employeeId &&
+                x.IsActive)
+            .Select(x => new EmployeeBeatResponse
+            {
+                Id = x.Id,
+                EmployeeId = x.EmployeeId,
+                BeatId = x.BeatId,
+                AssignedFrom = x.AssignedFrom,
+                AssignedTo = x.AssignedTo,
+                IsActive = x.IsActive
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 
 
     public async Task<IReadOnlyList<EmployeeBeatResponse>> GetAllAsync(
