@@ -101,7 +101,7 @@ public class AttendanceService : IAttendanceService
     employee.Id,
     cancellationToken);
 
-        Console.WriteLine($"Latest attendance action: {latestAction}");
+       // Console.WriteLine($"Latest attendance action: {latestAction}");
 
         if (latestAction is null &&
             request.Action == "CHECK_OUT")
