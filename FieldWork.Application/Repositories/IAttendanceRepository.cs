@@ -1,4 +1,6 @@
-﻿using FieldWork.Application.DTOs.Attendances;
+﻿
+
+using FieldWork.Application.DTOs.Attendances;
 
 namespace FieldWork.Application.Repositories;
 
@@ -17,6 +19,10 @@ public interface IAttendanceRepository
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<AttendanceResponse>> GetByEmployeeAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task<string?> GetLatestActionAsync(
         Guid employeeId,
         CancellationToken cancellationToken = default);
 }

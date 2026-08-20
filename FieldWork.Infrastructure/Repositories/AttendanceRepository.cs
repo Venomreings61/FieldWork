@@ -118,4 +118,20 @@ public class AttendanceRepository : IAttendanceRepository
             })
             .ToListAsync(cancellationToken);
     }
+
+
+    public async Task<string?> GetLatestActionAsync(
+     Guid employeeId,
+     CancellationToken cancellationToken = default)
+    {
+        return await _db.Attendances
+            .AsNoTracking()
+            .Where(x => x.EmployeeId == employeeId)
+            .OrderByDescending(x => x.ReceivedAt)
+            .Select(x => x.Action)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 }
+
+
+

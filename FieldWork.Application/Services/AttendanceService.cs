@@ -97,6 +97,32 @@ public class AttendanceService : IAttendanceService
                 beat.RadiusMeters);
         }
 
+        var latestAction = await _attendanceRepository.GetLatestActionAsync(
+    employee.Id,
+    cancellationToken);
+
+        Console.WriteLine($"Latest attendance action: {latestAction}");
+
+        if (latestAction is null &&
+            request.Action == "CHECK_OUT")
+        {
+            throw new InvalidOperationException(
+                "Employee must check in before checking out.");
+        }
+
+        if (latestAction == "CHECK_IN" &&
+            request.Action == "CHECK_IN")
+        {
+            throw new InvalidOperationException(
+                "Employee is already checked in.");
+        }
+
+        if (latestAction == "CHECK_OUT" &&
+            request.Action == "CHECK_OUT")
+        {
+            throw new InvalidOperationException(
+                "Employee is already checked out.");
+        }
 
         // 5. Server-controlled timestamps
         var receivedAt = DateTimeOffset.UtcNow;

@@ -19,14 +19,24 @@ public class AttendanceController : ControllerBase
 
     [HttpPost]
     public async Task<ActionResult<AttendanceResponse>> Create(
-        [FromBody] CreateAttendanceRequest request,
-        CancellationToken cancellationToken)
+     CreateAttendanceRequest request,
+     CancellationToken cancellationToken)
     {
-        var result = await _attendanceService.CreateAsync(
-            request,
-            cancellationToken);
+        try
+        {
+            var result = await _attendanceService.CreateAsync(
+                request,
+                cancellationToken);
 
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
     }
 
     [HttpGet]
