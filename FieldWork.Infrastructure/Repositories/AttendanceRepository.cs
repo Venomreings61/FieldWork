@@ -57,7 +57,7 @@ public class AttendanceRepository : IAttendanceRepository
             BeatId = beatId,
             ClientAttendanceId = request.ClientAttendanceId,
             Action = request.Action,
-            RecordedAt = request.RecordedAt,
+            RecordedAt = request.RecordedAt.Value,
             ReceivedAt = receivedAt,
             Latitude = request.Latitude,
             Longitude = request.Longitude,
