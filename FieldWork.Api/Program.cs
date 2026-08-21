@@ -10,17 +10,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using FieldWork.Api.Middleware;
 using System.Text;
-
-
-
-
 
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -37,34 +33,20 @@ builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+builder.Services.Configure<JwtSettings>(
+    builder.Configuration.GetSection("Jwt"));
+
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 
-
-builder.Services.AddHttpContextAccessor();
-
-builder.Services.AddScoped<ICurrentUser, CurrentUser>();
-
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
-
 builder.Services.AddScoped<IBeatRepository, BeatRepository>();
-
 builder.Services.AddScoped<IEmployeeBeatRepository, EmployeeBeatRepository>();
-
 builder.Services.AddScoped<IEmployeeBeatService, EmployeeBeatService>();
-
-builder.Services.AddScoped<IEmployeeService,EmployeeService>();
-
+builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IBeatService, BeatService>();
-
 builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
-
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
-
 builder.Services.AddScoped<IGeofenceService, GeofenceService>();
-
-
-
 
 var jwtSettings = builder.Configuration
     .GetSection("Jwt")
@@ -101,11 +83,7 @@ builder.Services
     };
 });
 
-
-
 builder.Services.AddAuthorization();
-
-
 
 builder.Services.AddEndpointsApiExplorer();
 
@@ -126,10 +104,6 @@ builder.Services.AddSwaggerGen(options =>
         [new OpenApiSecuritySchemeReference("Bearer", document)] = []
     });
 });
-
-
-
-
 
 var app = builder.Build();
 
@@ -163,12 +137,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-
 app.UseHttpsRedirection();
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
 app.Run();

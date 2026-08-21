@@ -1,6 +1,7 @@
 ﻿using FieldWork.Application.DTOs.Attendances;
 using FieldWork.Application.Repositories;
 using FieldWork.Application.Security;
+using FieldWork.Application.Exceptions;
 
 namespace FieldWork.Application.Services;
 
@@ -50,14 +51,14 @@ public class AttendanceService : IAttendanceService
 
         if (employee is null)
         {
-            throw new InvalidOperationException(
+            throw new BusinessRuleException(
                 "Employee was not found in the current tenant.");
         }
 
         if (!string.Equals(request.Action, "CHECK_IN", StringComparison.OrdinalIgnoreCase) &&
     !string.Equals(request.Action, "CHECK_OUT", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(
+            throw new BusinessRuleException(
                 "Invalid attendance action.");
         }
 
@@ -90,7 +91,7 @@ public class AttendanceService : IAttendanceService
 
             if (beat is null)
             {
-                throw new InvalidOperationException(
+                throw new BusinessRuleException(
                     "Assigned beat was not found in the current tenant.");
             }
 
@@ -106,7 +107,7 @@ public class AttendanceService : IAttendanceService
             if (request.Action == "CHECK_IN" &&
     !isWithinGeofence)
             {
-                throw new InvalidOperationException(
+                throw new BusinessRuleException(
                     "Employee is outside the assigned beat geofence.");
             }
         }
@@ -120,21 +121,21 @@ public class AttendanceService : IAttendanceService
         if (latestAction is null &&
             request.Action == "CHECK_OUT")
         {
-            throw new InvalidOperationException(
+            throw new BusinessRuleException(
                 "Employee must check in before checking out.");
         }
 
         if (latestAction == "CHECK_IN" &&
             request.Action == "CHECK_IN")
         {
-            throw new InvalidOperationException(
+            throw new BusinessRuleException(
                 "Employee is already checked in.");
         }
 
         if (latestAction == "CHECK_OUT" &&
             request.Action == "CHECK_OUT")
         {
-            throw new InvalidOperationException(
+            throw new BusinessRuleException(
                 "Employee is already checked out.");
         }
 
@@ -168,7 +169,7 @@ public class AttendanceService : IAttendanceService
 
         if (employee is null)
         {
-            throw new InvalidOperationException(
+            throw new BusinessRuleException(
                 "Employee was not found in the current tenant.");
         }
 
