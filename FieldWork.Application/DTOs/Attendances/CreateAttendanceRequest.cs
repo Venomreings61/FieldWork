@@ -14,14 +14,16 @@ public class CreateAttendanceRequest
     [Required]
     public DateTimeOffset? RecordedAt { get; set; }
 
-    [Required]
+    [Range(-90, 90)]
     public decimal Latitude { get; set; }
 
-    [Required]
+    [Range(-180, 180)]
     public decimal Longitude { get; set; }
 
+    [Range(0, double.MaxValue)]
     public decimal? AccuracyMeters { get; set; }
 
     [Required]
     public string Source { get; set; } = string.Empty;
 }
+

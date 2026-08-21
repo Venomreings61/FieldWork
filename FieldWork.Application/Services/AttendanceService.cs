@@ -54,6 +54,13 @@ public class AttendanceService : IAttendanceService
                 "Employee was not found in the current tenant.");
         }
 
+        if (!string.Equals(request.Action, "CHECK_IN", StringComparison.OrdinalIgnoreCase) &&
+    !string.Equals(request.Action, "CHECK_OUT", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Invalid attendance action.");
+        }
+
         // 3. Check whether this client request was already processed
         var existingAttendance =
             await _attendanceRepository.GetByClientAttendanceIdAsync(
@@ -95,6 +102,13 @@ public class AttendanceService : IAttendanceService
                 beat.CenterLatitude,
                 beat.CenterLongitude,
                 beat.RadiusMeters);
+
+            if (request.Action == "CHECK_IN" &&
+    !isWithinGeofence)
+            {
+                throw new InvalidOperationException(
+                    "Employee is outside the assigned beat geofence.");
+            }
         }
 
         var latestAction = await _attendanceRepository.GetLatestActionAsync(
