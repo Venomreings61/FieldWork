@@ -35,14 +35,12 @@ public class AttendanceService : IAttendanceService
         CreateAttendanceRequest request,
         CancellationToken cancellationToken = default)
     {
-        // 1. User must be authenticated
         if (!_currentUser.IsAuthenticated)
         {
             throw new UnauthorizedAccessException(
                 "User is not authenticated.");
         }
 
-        // 2. Find employee from authenticated user
         var employee = await _employeeRepository.GetByUserIdAsync(
             _currentUser.UserId,
             _currentUser.TenantId,
@@ -50,11 +48,10 @@ public class AttendanceService : IAttendanceService
 
         if (employee is null)
         {
-            throw new BusinessRuleException(
+            throw new NotFoundException(
                 "Employee was not found in the current tenant.");
         }
 
-        // 3. Validate action early (before any beat/geofence work)
         if (!string.Equals(request.Action, "CHECK_IN", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(request.Action, "CHECK_OUT", StringComparison.OrdinalIgnoreCase))
         {
@@ -62,7 +59,6 @@ public class AttendanceService : IAttendanceService
                 "Invalid attendance action.");
         }
 
-        // 4. Check whether this client request was already processed
         var existingAttendance =
             await _attendanceRepository.GetByClientAttendanceIdAsync(
                 request.ClientAttendanceId,
@@ -73,7 +69,6 @@ public class AttendanceService : IAttendanceService
             return existingAttendance;
         }
 
-        // 5. Find employee's active beat assignment — now MANDATORY
         var activeBeat =
             await _employeeBeatRepository.GetActiveByEmployeeAsync(
                 employee.Id,
@@ -92,7 +87,7 @@ public class AttendanceService : IAttendanceService
 
         if (beat is null)
         {
-            throw new BusinessRuleException(
+            throw new NotFoundException(
                 "Assigned beat was not found in the current tenant.");
         }
 
@@ -105,14 +100,12 @@ public class AttendanceService : IAttendanceService
             beat.CenterLongitude,
             beat.RadiusMeters);
 
-        // 6. Geofence now enforced for BOTH CHECK_IN and CHECK_OUT
         if (!isWithinGeofence)
         {
             throw new BusinessRuleException(
                 "Employee is outside the assigned beat geofence.");
         }
 
-        // 7. Attendance state validation (unchanged)
         var latestAction = await _attendanceRepository.GetLatestActionAsync(
             employee.Id,
             cancellationToken);
@@ -120,28 +113,26 @@ public class AttendanceService : IAttendanceService
         if (latestAction is null &&
             request.Action == "CHECK_OUT")
         {
-            throw new BusinessRuleException(
+            throw new ConflictException(
                 "Employee must check in before checking out.");
         }
 
         if (latestAction == "CHECK_IN" &&
             request.Action == "CHECK_IN")
         {
-            throw new BusinessRuleException(
+            throw new ConflictException(
                 "Employee is already checked in.");
         }
 
         if (latestAction == "CHECK_OUT" &&
             request.Action == "CHECK_OUT")
         {
-            throw new BusinessRuleException(
+            throw new ConflictException(
                 "Employee is already checked out.");
         }
 
-        // 8. Server-controlled timestamps
         var receivedAt = DateTimeOffset.UtcNow;
 
-        // 9. Persist attendance
         return await _attendanceRepository.CreateAsync(
             employee.Id,
             beatId,
@@ -152,9 +143,9 @@ public class AttendanceService : IAttendanceService
     }
 
     public async Task<PagedResult<AttendanceResponse>> GetMyAttendanceAsync(
-    int page,
-    int pageSize,
-    CancellationToken cancellationToken = default)
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
     {
         if (!_currentUser.IsAuthenticated)
         {
@@ -168,10 +159,9 @@ public class AttendanceService : IAttendanceService
 
         if (employee is null)
         {
-            throw new BusinessRuleException("Employee was not found in the current tenant.");
+            throw new NotFoundException("Employee was not found in the current tenant.");
         }
 
-        // Clamp to sane bounds so nobody requests pageSize=999999
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 100);
 

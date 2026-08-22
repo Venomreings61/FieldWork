@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using FieldWork.Application.Exceptions;
+using Microsoft.AspNetCore.Mvc;
 
 namespace FieldWork.Api.Middleware;
 
@@ -22,53 +23,52 @@ public class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
-        //catch (InvalidOperationException ex)
-        catch (BusinessRuleException ex)
-        {
-            _logger.LogWarning(ex, "Business rule violation.");
-
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            context.Response.ContentType = "application/json";
-
-            var response = new
-            {
-                message = ex.Message
-            };
-
-            await context.Response.WriteAsync(
-                JsonSerializer.Serialize(response));
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            _logger.LogWarning(ex, "Unauthorized request.");
-
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            context.Response.ContentType = "application/json";
-
-            var response = new
-            {
-                message = ex.Message
-            };
-
-            await context.Response.WriteAsync(
-                JsonSerializer.Serialize(response));
-        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception.");
+            var (statusCode, title) = MapException(ex);
 
-            context.Response.StatusCode =
-                StatusCodes.Status500InternalServerError;
-
-            context.Response.ContentType = "application/json";
-
-            var response = new
+            if (statusCode == StatusCodes.Status500InternalServerError)
             {
-                message = "An unexpected error occurred."
+                _logger.LogError(ex, "Unhandled exception.");
+            }
+            else
+            {
+                _logger.LogWarning(ex, "{Title}", title);
+            }
+
+            var problemDetails = new ProblemDetails
+            {
+                Status = statusCode,
+                Title = title,
+                Detail = ex.Message,
+                Type = $"https://tools.ietf.org/html/rfc9110#section-15.5.{SectionFor(statusCode)}",
+                Instance = context.Request.Path
             };
 
+            context.Response.StatusCode = statusCode;
+            context.Response.ContentType = "application/problem+json";
+
             await context.Response.WriteAsync(
-                JsonSerializer.Serialize(response));
+                JsonSerializer.Serialize(problemDetails));
         }
     }
+
+    private static (int StatusCode, string Title) MapException(Exception ex) => ex switch
+    {
+        BusinessRuleException => (StatusCodes.Status400BadRequest, "Business rule violation."),
+        NotFoundException => (StatusCodes.Status404NotFound, "Resource not found."),
+        ConflictException => (StatusCodes.Status409Conflict, "Conflict."),
+        UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized."),
+        _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.")
+    };
+
+    private static int SectionFor(int statusCode) => statusCode switch
+    {
+        400 => 1,
+        401 => 2,
+        403 => 4,
+        404 => 5,
+        409 => 10,
+        _ => 1
+    };
 }

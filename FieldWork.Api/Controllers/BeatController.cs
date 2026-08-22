@@ -1,4 +1,4 @@
-﻿
+﻿using FieldWork.Application.Exceptions;
 using FieldWork.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,32 +18,22 @@ public class BeatController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
-        var beats = await _beatService
-            .GetAllAsync(cancellationToken);
-
+        var beats = await _beatService.GetAllAsync(cancellationToken);
         return Ok(beats);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(
-        Guid id,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var beat = await _beatService
-            .GetByIdAsync(id, cancellationToken);
+        var beat = await _beatService.GetByIdAsync(id, cancellationToken);
 
         if (beat is null)
         {
-            return NotFound(new
-            {
-                message = "Beat not found."
-            });
+            throw new NotFoundException("Beat not found.");
         }
 
         return Ok(beat);
     }
 }
-

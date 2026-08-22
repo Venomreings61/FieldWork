@@ -1,5 +1,4 @@
-﻿
-using FieldWork.Application.DTOs.EmployeeBeats;
+﻿using FieldWork.Application.DTOs.EmployeeBeats;
 using FieldWork.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,8 +12,7 @@ public class EmployeeBeatController : ControllerBase
 {
     private readonly IEmployeeBeatService _employeeBeatService;
 
-    public EmployeeBeatController(
-        IEmployeeBeatService employeeBeatService)
+    public EmployeeBeatController(IEmployeeBeatService employeeBeatService)
     {
         _employeeBeatService = employeeBeatService;
     }
@@ -24,30 +22,14 @@ public class EmployeeBeatController : ControllerBase
         [FromBody] CreateEmployeeBeatRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _employeeBeatService
-                .CreateAsync(request, cancellationToken);
-
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new
-            {
-                message = ex.Message
-            });
-        }
+        var result = await _employeeBeatService.CreateAsync(request, cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
-        var assignments = await _employeeBeatService
-            .GetAllAsync(cancellationToken);
-
+        var assignments = await _employeeBeatService.GetAllAsync(cancellationToken);
         return Ok(assignments);
     }
 }
-

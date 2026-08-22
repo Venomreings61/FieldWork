@@ -1,11 +1,9 @@
-﻿
-using FieldWork.Application.DTOs.EmployeeBeats;
+﻿using FieldWork.Application.DTOs.EmployeeBeats;
+using FieldWork.Application.Exceptions;
 using FieldWork.Application.Repositories;
 using FieldWork.Application.Security;
 
-
 namespace FieldWork.Application.Services;
-
 
 public class EmployeeBeatService : IEmployeeBeatService
 {
@@ -26,7 +24,6 @@ public class EmployeeBeatService : IEmployeeBeatService
     {
         var tenantId = _currentUser.TenantId;
 
-        // 1. Employee must belong to current tenant
         var employeeExists = await _repository.EmployeeExistsAsync(
             request.EmployeeId,
             tenantId,
@@ -34,11 +31,10 @@ public class EmployeeBeatService : IEmployeeBeatService
 
         if (!employeeExists)
         {
-            throw new InvalidOperationException(
+            throw new NotFoundException(
                 "Employee was not found in the current tenant.");
         }
 
-        // 2. Beat must belong to current tenant
         var beatExists = await _repository.BeatExistsAsync(
             request.BeatId,
             tenantId,
@@ -46,11 +42,10 @@ public class EmployeeBeatService : IEmployeeBeatService
 
         if (!beatExists)
         {
-            throw new InvalidOperationException(
+            throw new NotFoundException(
                 "Beat was not found in the current tenant.");
         }
 
-        // 3. Employee can only have one active beat
         var hasActiveAssignment =
             await _repository.HasActiveAssignmentAsync(
                 request.EmployeeId,
@@ -58,11 +53,10 @@ public class EmployeeBeatService : IEmployeeBeatService
 
         if (hasActiveAssignment)
         {
-            throw new InvalidOperationException(
+            throw new ConflictException(
                 "Employee already has an active beat.");
         }
 
-        // 4. Server controls the assignment timestamp
         var assignedFrom = DateTimeOffset.UtcNow;
 
         return await _repository.CreateAsync(
@@ -80,10 +74,3 @@ public class EmployeeBeatService : IEmployeeBeatService
             cancellationToken);
     }
 }
-
-
-
-
-
-
-
