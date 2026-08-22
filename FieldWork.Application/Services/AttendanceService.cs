@@ -14,14 +14,13 @@ public class AttendanceService : IAttendanceService
     private readonly IGeofenceService _geofenceService;
     private readonly IBeatRepository _beatRepository;
 
-
     public AttendanceService(
-     IAttendanceRepository attendanceRepository,
-     IEmployeeRepository employeeRepository,
-     IEmployeeBeatRepository employeeBeatRepository,
-     IBeatRepository beatRepository,
-     ICurrentUser currentUser,
-     IGeofenceService geofenceService)
+        IAttendanceRepository attendanceRepository,
+        IEmployeeRepository employeeRepository,
+        IEmployeeBeatRepository employeeBeatRepository,
+        IBeatRepository beatRepository,
+        ICurrentUser currentUser,
+        IGeofenceService geofenceService)
     {
         _attendanceRepository = attendanceRepository;
         _employeeRepository = employeeRepository;
@@ -30,7 +29,6 @@ public class AttendanceService : IAttendanceService
         _currentUser = currentUser;
         _geofenceService = geofenceService;
     }
-
 
     public async Task<AttendanceResponse> CreateAsync(
         CreateAttendanceRequest request,
@@ -55,14 +53,15 @@ public class AttendanceService : IAttendanceService
                 "Employee was not found in the current tenant.");
         }
 
+        // 3. Validate action early (before any beat/geofence work)
         if (!string.Equals(request.Action, "CHECK_IN", StringComparison.OrdinalIgnoreCase) &&
-    !string.Equals(request.Action, "CHECK_OUT", StringComparison.OrdinalIgnoreCase))
+            !string.Equals(request.Action, "CHECK_OUT", StringComparison.OrdinalIgnoreCase))
         {
             throw new BusinessRuleException(
                 "Invalid attendance action.");
         }
 
-        // 3. Check whether this client request was already processed
+        // 4. Check whether this client request was already processed
         var existingAttendance =
             await _attendanceRepository.GetByClientAttendanceIdAsync(
                 request.ClientAttendanceId,
@@ -73,50 +72,49 @@ public class AttendanceService : IAttendanceService
             return existingAttendance;
         }
 
-        // 4. Find employee's active beat assignment
+        // 5. Find employee's active beat assignment — now MANDATORY
         var activeBeat =
-      await _employeeBeatRepository.GetActiveByEmployeeAsync(
-          employee.Id,
-          cancellationToken);
-
-        Guid? beatId = null;
-        var isWithinGeofence = false;
-
-        if (activeBeat is not null)
-        {
-            var beat = await _beatRepository.GetByIdAsync(
-                activeBeat.BeatId,
-                _currentUser.TenantId,
+            await _employeeBeatRepository.GetActiveByEmployeeAsync(
+                employee.Id,
                 cancellationToken);
 
-            if (beat is null)
-            {
-                throw new BusinessRuleException(
-                    "Assigned beat was not found in the current tenant.");
-            }
-
-            beatId = beat.Id;
-
-            isWithinGeofence = _geofenceService.IsWithinRadius(
-                request.Latitude,
-                request.Longitude,
-                beat.CenterLatitude,
-                beat.CenterLongitude,
-                beat.RadiusMeters);
-
-            if (request.Action == "CHECK_IN" &&
-    !isWithinGeofence)
-            {
-                throw new BusinessRuleException(
-                    "Employee is outside the assigned beat geofence.");
-            }
+        if (activeBeat is null)
+        {
+            throw new BusinessRuleException(
+                "Employee does not have an active beat assignment.");
         }
 
-        var latestAction = await _attendanceRepository.GetLatestActionAsync(
-    employee.Id,
-    cancellationToken);
+        var beat = await _beatRepository.GetByIdAsync(
+            activeBeat.BeatId,
+            _currentUser.TenantId,
+            cancellationToken);
 
-       // Console.WriteLine($"Latest attendance action: {latestAction}");
+        if (beat is null)
+        {
+            throw new BusinessRuleException(
+                "Assigned beat was not found in the current tenant.");
+        }
+
+        var beatId = beat.Id;
+
+        var isWithinGeofence = _geofenceService.IsWithinRadius(
+            request.Latitude,
+            request.Longitude,
+            beat.CenterLatitude,
+            beat.CenterLongitude,
+            beat.RadiusMeters);
+
+        // 6. Geofence now enforced for BOTH CHECK_IN and CHECK_OUT
+        if (!isWithinGeofence)
+        {
+            throw new BusinessRuleException(
+                "Employee is outside the assigned beat geofence.");
+        }
+
+        // 7. Attendance state validation (unchanged)
+        var latestAction = await _attendanceRepository.GetLatestActionAsync(
+            employee.Id,
+            cancellationToken);
 
         if (latestAction is null &&
             request.Action == "CHECK_OUT")
@@ -139,11 +137,10 @@ public class AttendanceService : IAttendanceService
                 "Employee is already checked out.");
         }
 
-        // 5. Server-controlled timestamps
+        // 8. Server-controlled timestamps
         var receivedAt = DateTimeOffset.UtcNow;
-        
 
-        // 6. Persist attendance
+        // 9. Persist attendance
         return await _attendanceRepository.CreateAsync(
             employee.Id,
             beatId,

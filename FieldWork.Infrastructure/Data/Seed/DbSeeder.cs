@@ -49,7 +49,6 @@ public static class DbSeeder
         }
         else
         {
-            // Ensure Tenant A assignment and active state
             userA.TenantId = tenantA.Id;
             userA.PasswordHash = defaultPasswordHash;
             userA.IsActive = true;
@@ -72,7 +71,9 @@ public static class DbSeeder
             db.Employees.Add(employeeA);
         }
 
-        var beatA = await db.Beats.FirstOrDefaultAsync(x => x.Code == "BEAT001");
+        // FIX 1: scope by TenantId + Code, not Code alone
+        var beatA = await db.Beats
+            .FirstOrDefaultAsync(x => x.TenantId == tenantA.Id && x.Code == "BEAT001");
         if (beatA is null)
         {
             beatA = new Beat
@@ -143,7 +144,6 @@ public static class DbSeeder
         }
         else
         {
-            // Ensure Tenant B assignment and active state
             userB.TenantId = tenantB.Id;
             userB.PasswordHash = defaultPasswordHash;
             userB.IsActive = true;
@@ -166,7 +166,9 @@ public static class DbSeeder
             db.Employees.Add(employeeB);
         }
 
-        var beatB = await db.Beats.FirstOrDefaultAsync(x => x.Code == "BEAT002");
+        // FIX 1: scope by TenantId + Code, not Code alone
+        var beatB = await db.Beats
+            .FirstOrDefaultAsync(x => x.TenantId == tenantB.Id && x.Code == "BEAT002");
         if (beatB is null)
         {
             beatB = new Beat
@@ -183,6 +185,29 @@ public static class DbSeeder
             };
             db.Beats.Add(beatB);
         }
+
+        // FIX 2: assign employeeB to beatB, mirroring Tenant A's structure
+        // ↓↓↓ ADD THIS NEW BLOCK ↓↓↓
+        var employeeBeatB = await db.EmployeeBeats
+            .FirstOrDefaultAsync(x =>
+                x.EmployeeId == employeeB.Id &&
+                x.BeatId == beatB.Id);
+
+        if (employeeBeatB is null)
+        {
+            db.EmployeeBeats.Add(new EmployeeBeat
+            {
+                Id = Guid.NewGuid(),
+                EmployeeId = employeeB.Id,
+                BeatId = beatB.Id,
+                AssignedFrom = now,
+                AssignedTo = null,
+                IsActive = true
+            });
+        }
+        // ↑↑↑ ADD THIS NEW BLOCK ↑↑↑
+
+
 
         await db.SaveChangesAsync();
     }
