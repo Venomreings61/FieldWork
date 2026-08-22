@@ -7,7 +7,7 @@ namespace FieldWork.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = "Admin")]
 public class BeatController : ControllerBase
 {
     private readonly IBeatService _beatService;

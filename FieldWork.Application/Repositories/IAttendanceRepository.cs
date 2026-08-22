@@ -1,6 +1,6 @@
 ﻿
-
 using FieldWork.Application.DTOs.Attendances;
+using FieldWork.Application.DTOs.Common;
 
 namespace FieldWork.Application.Repositories;
 
@@ -18,9 +18,11 @@ public interface IAttendanceRepository
         bool isWithinGeofence,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<AttendanceResponse>> GetByEmployeeAsync(
-        Guid employeeId,
-        CancellationToken cancellationToken = default);
+    Task<PagedResult<AttendanceResponse>> GetByEmployeeAsync(
+     Guid employeeId,
+     int page,
+     int pageSize,
+     CancellationToken cancellationToken = default);
 
     Task<string?> GetLatestActionAsync(
         Guid employeeId,

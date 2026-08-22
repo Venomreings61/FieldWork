@@ -107,6 +107,30 @@ public static class DbSeeder
             });
         }
 
+        var adminUser = await db.Users.FirstOrDefaultAsync(x => x.Username == "admin");
+        if (adminUser is null)
+        {
+            adminUser = new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantA.Id,
+                Username = "admin",
+                Email = "admin@fieldwork.local",
+                PasswordHash = defaultPasswordHash,
+                Role = "Admin",
+                IsActive = true,
+                CreatedAt = now
+            };
+            db.Users.Add(adminUser);
+        }
+        else
+        {
+            adminUser.TenantId = tenantA.Id;
+            adminUser.PasswordHash = defaultPasswordHash;
+            adminUser.Role = "Admin";
+            adminUser.IsActive = true;
+        }
+
         await db.SaveChangesAsync();
 
         // ============================================================

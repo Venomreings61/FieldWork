@@ -1,7 +1,8 @@
 ﻿using FieldWork.Application.DTOs.Attendances;
+using FieldWork.Application.DTOs.Common;
+using FieldWork.Application.Exceptions;
 using FieldWork.Application.Repositories;
 using FieldWork.Application.Security;
-using FieldWork.Application.Exceptions;
 
 namespace FieldWork.Application.Services;
 
@@ -150,13 +151,14 @@ public class AttendanceService : IAttendanceService
             cancellationToken);
     }
 
-    public async Task<IReadOnlyList<AttendanceResponse>> GetMyAttendanceAsync(
-        CancellationToken cancellationToken = default)
+    public async Task<PagedResult<AttendanceResponse>> GetMyAttendanceAsync(
+    int page,
+    int pageSize,
+    CancellationToken cancellationToken = default)
     {
         if (!_currentUser.IsAuthenticated)
         {
-            throw new UnauthorizedAccessException(
-                "User is not authenticated.");
+            throw new UnauthorizedAccessException("User is not authenticated.");
         }
 
         var employee = await _employeeRepository.GetByUserIdAsync(
@@ -166,12 +168,17 @@ public class AttendanceService : IAttendanceService
 
         if (employee is null)
         {
-            throw new BusinessRuleException(
-                "Employee was not found in the current tenant.");
+            throw new BusinessRuleException("Employee was not found in the current tenant.");
         }
+
+        // Clamp to sane bounds so nobody requests pageSize=999999
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
 
         return await _attendanceRepository.GetByEmployeeAsync(
             employee.Id,
+            page,
+            pageSize,
             cancellationToken);
     }
 }

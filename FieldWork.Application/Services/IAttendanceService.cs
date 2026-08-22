@@ -1,4 +1,5 @@
 ﻿using FieldWork.Application.DTOs.Attendances;
+using FieldWork.Application.DTOs.Common;
 
 namespace FieldWork.Application.Services;
 
@@ -8,6 +9,8 @@ public interface IAttendanceService
         CreateAttendanceRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<AttendanceResponse>> GetMyAttendanceAsync(
+    Task<PagedResult<AttendanceResponse>> GetMyAttendanceAsync(
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 }

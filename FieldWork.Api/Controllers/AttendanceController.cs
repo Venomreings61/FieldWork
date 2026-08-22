@@ -1,4 +1,5 @@
 ﻿using FieldWork.Application.DTOs.Attendances;
+using FieldWork.Application.DTOs.Common;
 using FieldWork.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,35 +21,23 @@ public class AttendanceController : ControllerBase
 
     [HttpPost]
     public async Task<ActionResult<AttendanceResponse>> Create(
-     CreateAttendanceRequest request,
-     CancellationToken cancellationToken)
+    CreateAttendanceRequest request,
+    CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _attendanceService.CreateAsync(
-                request,
-                cancellationToken);
-
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new
-            {
-                message = ex.Message
-            });
-        }
-    }
-
-    [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<AttendanceResponse>>> GetMyAttendance(
-        CancellationToken cancellationToken)
-    {
-        var result = await _attendanceService.GetMyAttendanceAsync(
-            cancellationToken);
-
+        var result = await _attendanceService.CreateAsync(request, cancellationToken);
         return Ok(result);
     }
 
-   
+
+    [HttpGet]
+    public async Task<ActionResult<PagedResult<AttendanceResponse>>> GetMyAttendance(
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20,
+    CancellationToken cancellationToken = default)
+    {
+        var result = await _attendanceService.GetMyAttendanceAsync(page, pageSize, cancellationToken);
+        return Ok(result);
     }
+
+
+}
