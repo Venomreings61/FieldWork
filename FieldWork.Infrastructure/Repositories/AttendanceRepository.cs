@@ -1,4 +1,5 @@
 ﻿using FieldWork.Application.DTOs.Attendances;
+using FieldWork.Application.DTOs.Common;
 using FieldWork.Application.Repositories;
 using FieldWork.Domain.Entities;
 using FieldWork.Infrastructure.Data;
@@ -43,12 +44,12 @@ public class AttendanceRepository : IAttendanceRepository
     }
 
     public async Task<AttendanceResponse> CreateAsync(
-        Guid employeeId,
-        Guid? beatId,
-        CreateAttendanceRequest request,
-        DateTimeOffset receivedAt,
-        bool isWithinGeofence,
-        CancellationToken cancellationToken = default)
+     Guid employeeId,
+     Guid? beatId,
+     CreateAttendanceRequest request,
+     DateTimeOffset receivedAt,
+     bool isWithinGeofence,
+     CancellationToken cancellationToken = default)
     {
         var attendance = new Attendance
         {
@@ -70,7 +71,27 @@ public class AttendanceRepository : IAttendanceRepository
 
         _db.Attendances.Add(attendance);
 
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            // Another request won the race and inserted this ClientAttendanceId first.
+            // Detach the failed entity and return the existing record instead.
+            _db.Entry(attendance).State = EntityState.Detached;
+
+            var existing = await GetByClientAttendanceIdAsync(
+                request.ClientAttendanceId,
+                cancellationToken);
+
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            throw; // truly unexpected — rethrow if somehow still not found
+        }
 
         return new AttendanceResponse
         {
@@ -91,14 +112,28 @@ public class AttendanceRepository : IAttendanceRepository
         };
     }
 
-    public async Task<IReadOnlyList<AttendanceResponse>> GetByEmployeeAsync(
-        Guid employeeId,
-        CancellationToken cancellationToken = default)
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
     {
-        return await _db.Attendances
+        return ex.InnerException is Npgsql.PostgresException pgEx &&
+               pgEx.SqlState == "23505"; // Postgres unique_violation error code
+    }
+
+    public async Task<PagedResult<AttendanceResponse>> GetByEmployeeAsync(
+     Guid employeeId,
+     int page,
+     int pageSize,
+     CancellationToken cancellationToken = default)
+    {
+        var query = _db.Attendances
             .AsNoTracking()
             .Where(x => x.EmployeeId == employeeId)
-            .OrderByDescending(x => x.RecordedAt)
+            .OrderByDescending(x => x.RecordedAt);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(x => new AttendanceResponse
             {
                 Id = x.Id,
@@ -117,8 +152,15 @@ public class AttendanceRepository : IAttendanceRepository
                 CreatedAt = x.CreatedAt
             })
             .ToListAsync(cancellationToken);
-    }
 
+        return new PagedResult<AttendanceResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
+    }
 
     public async Task<string?> GetLatestActionAsync(
      Guid employeeId,
