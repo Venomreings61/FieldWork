@@ -1,7 +1,12 @@
-﻿// FieldWork.Application/Exceptions/ConflictException.cs
+﻿// ConflictException.cs
 namespace FieldWork.Application.Exceptions;
 
 public class ConflictException : Exception
 {
-    public ConflictException(string message) : base(message) { }
+    public string Code { get; }
+
+    public ConflictException(string code, string message) : base(message)
+    {
+        Code = code;
+    }
 }

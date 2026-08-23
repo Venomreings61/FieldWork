@@ -31,7 +31,7 @@ public class BeatController : ControllerBase
 
         if (beat is null)
         {
-            throw new NotFoundException("Beat not found.");
+            throw new NotFoundException("BEAT_NOT_FOUND", "Beat not found.");
         }
 
         return Ok(beat);

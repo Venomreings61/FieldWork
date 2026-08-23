@@ -49,6 +49,7 @@ public class AttendanceService : IAttendanceService
         if (employee is null)
         {
             throw new NotFoundException(
+                "EMPLOYEE_NOT_FOUND",
                 "Employee was not found in the current tenant.");
         }
 
@@ -56,6 +57,7 @@ public class AttendanceService : IAttendanceService
             !string.Equals(request.Action, "CHECK_OUT", StringComparison.OrdinalIgnoreCase))
         {
             throw new BusinessRuleException(
+                "ATTENDANCE_INVALID_ACTION",
                 "Invalid attendance action.");
         }
 
@@ -77,6 +79,7 @@ public class AttendanceService : IAttendanceService
         if (activeBeat is null)
         {
             throw new BusinessRuleException(
+                "ATTENDANCE_NO_ACTIVE_BEAT",
                 "Employee does not have an active beat assignment.");
         }
 
@@ -88,6 +91,7 @@ public class AttendanceService : IAttendanceService
         if (beat is null)
         {
             throw new NotFoundException(
+                "BEAT_NOT_FOUND",
                 "Assigned beat was not found in the current tenant.");
         }
 
@@ -103,6 +107,7 @@ public class AttendanceService : IAttendanceService
         if (!isWithinGeofence)
         {
             throw new BusinessRuleException(
+                "ATTENDANCE_OUTSIDE_GEOFENCE",
                 "Employee is outside the assigned beat geofence.");
         }
 
@@ -114,6 +119,7 @@ public class AttendanceService : IAttendanceService
             request.Action == "CHECK_OUT")
         {
             throw new ConflictException(
+                "ATTENDANCE_CHECKOUT_WITHOUT_CHECKIN",
                 "Employee must check in before checking out.");
         }
 
@@ -121,6 +127,7 @@ public class AttendanceService : IAttendanceService
             request.Action == "CHECK_IN")
         {
             throw new ConflictException(
+                "ATTENDANCE_ALREADY_CHECKED_IN",
                 "Employee is already checked in.");
         }
 
@@ -128,6 +135,7 @@ public class AttendanceService : IAttendanceService
             request.Action == "CHECK_OUT")
         {
             throw new ConflictException(
+                "ATTENDANCE_ALREADY_CHECKED_OUT",
                 "Employee is already checked out.");
         }
 
@@ -159,7 +167,7 @@ public class AttendanceService : IAttendanceService
 
         if (employee is null)
         {
-            throw new NotFoundException("Employee was not found in the current tenant.");
+            throw new NotFoundException("EMPLOYEE_NOT_FOUND", "Employee was not found in the current tenant.");
         }
 
         page = Math.Max(page, 1);

@@ -31,8 +31,7 @@ public class EmployeeBeatService : IEmployeeBeatService
 
         if (!employeeExists)
         {
-            throw new NotFoundException(
-                "Employee was not found in the current tenant.");
+            throw new NotFoundException("EMPLOYEE_NOT_FOUND", "Employee was not found in the current tenant.");
         }
 
         var beatExists = await _repository.BeatExistsAsync(
@@ -42,8 +41,7 @@ public class EmployeeBeatService : IEmployeeBeatService
 
         if (!beatExists)
         {
-            throw new NotFoundException(
-                "Beat was not found in the current tenant.");
+            throw new NotFoundException("BEAT_NOT_FOUND", "Beat was not found in the current tenant.");
         }
 
         var hasActiveAssignment =
@@ -53,8 +51,7 @@ public class EmployeeBeatService : IEmployeeBeatService
 
         if (hasActiveAssignment)
         {
-            throw new ConflictException(
-                "Employee already has an active beat.");
+            throw new ConflictException("EMPLOYEE_ACTIVE_BEAT_EXISTS", "Employee already has an active beat.");
         }
 
         var assignedFrom = DateTimeOffset.UtcNow;

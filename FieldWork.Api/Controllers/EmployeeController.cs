@@ -31,7 +31,7 @@ public class EmployeeController : ControllerBase
 
         if (employee is null)
         {
-            throw new NotFoundException("Employee not found.");
+            throw new NotFoundException("EMPLOYEE_NOT_FOUND", "Employee not found.");
         }
 
         return Ok(employee);

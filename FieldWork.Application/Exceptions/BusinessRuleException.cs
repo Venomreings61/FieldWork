@@ -1,9 +1,12 @@
-﻿namespace FieldWork.Application.Exceptions;
+﻿// BusinessRuleException.cs
+namespace FieldWork.Application.Exceptions;
 
 public class BusinessRuleException : Exception
 {
-    public BusinessRuleException(string message)
-        : base(message)
+    public string Code { get; }
+
+    public BusinessRuleException(string code, string message) : base(message)
     {
+        Code = code;
     }
 }

@@ -25,7 +25,7 @@ public class ExceptionHandlingMiddleware
         }
         catch (Exception ex)
         {
-            var (statusCode, title) = MapException(ex);
+            var (statusCode, title, code) = MapException(ex);
 
             if (statusCode == StatusCodes.Status500InternalServerError)
             {
@@ -45,6 +45,9 @@ public class ExceptionHandlingMiddleware
                 Instance = context.Request.Path
             };
 
+            problemDetails.Extensions["code"] = code;
+            problemDetails.Extensions["traceId"] = context.TraceIdentifier;
+
             context.Response.StatusCode = statusCode;
             context.Response.ContentType = "application/problem+json";
 
@@ -53,13 +56,13 @@ public class ExceptionHandlingMiddleware
         }
     }
 
-    private static (int StatusCode, string Title) MapException(Exception ex) => ex switch
+    private static (int StatusCode, string Title, string Code) MapException(Exception ex) => ex switch
     {
-        BusinessRuleException => (StatusCodes.Status400BadRequest, "Business rule violation."),
-        NotFoundException => (StatusCodes.Status404NotFound, "Resource not found."),
-        ConflictException => (StatusCodes.Status409Conflict, "Conflict."),
-        UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized."),
-        _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.")
+        BusinessRuleException e => (StatusCodes.Status400BadRequest, "Business rule violation.", e.Code),
+        NotFoundException e => (StatusCodes.Status404NotFound, "Resource not found.", e.Code),
+        ConflictException e => (StatusCodes.Status409Conflict, "Conflict.", e.Code),
+        UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized.", "UNAUTHORIZED"),
+        _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", "INTERNAL_SERVER_ERROR")
     };
 
     private static int SectionFor(int statusCode) => statusCode switch
