@@ -1,11 +1,11 @@
-﻿
 using FieldWork.Application.DTOs.EmployeeBeats;
+using FieldWork.Application.Exceptions;
 using FieldWork.Application.Repositories;
 using FieldWork.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FieldWork.Infrastructure.Repositories;
-
 
 public class EmployeeBeatRepository : IEmployeeBeatRepository
 {
@@ -16,12 +16,11 @@ public class EmployeeBeatRepository : IEmployeeBeatRepository
         _db = db;
     }
 
-
-public async Task<EmployeeBeatResponse> CreateAsync(
-    Guid employeeId,
-    Guid beatId,
-    DateTimeOffset assignedFrom,
-    CancellationToken cancellationToken = default)
+    public async Task<EmployeeBeatResponse> CreateAsync(
+        Guid employeeId,
+        Guid beatId,
+        DateTimeOffset assignedFrom,
+        CancellationToken cancellationToken = default)
     {
         var employeeBeat = new EmployeeBeat
         {
@@ -35,7 +34,18 @@ public async Task<EmployeeBeatResponse> CreateAsync(
 
         _db.EmployeeBeats.Add(employeeBeat);
 
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            _db.Entry(employeeBeat).State = EntityState.Detached;
+
+            throw new ConflictException(
+                "EMPLOYEE_ACTIVE_BEAT_EXISTS",
+                "Employee already has an active beat.");
+        }
 
         return new EmployeeBeatResponse
         {
@@ -49,14 +59,12 @@ public async Task<EmployeeBeatResponse> CreateAsync(
     }
 
     public async Task<EmployeeBeatResponse?> GetActiveByEmployeeAsync(
-    Guid employeeId,
-    CancellationToken cancellationToken = default)
+        Guid employeeId,
+        CancellationToken cancellationToken = default)
     {
         return await _db.EmployeeBeats
             .AsNoTracking()
-            .Where(x =>
-                x.EmployeeId == employeeId &&
-                x.IsActive)
+            .Where(x => x.EmployeeId == employeeId && x.IsActive)
             .Select(x => new EmployeeBeatResponse
             {
                 Id = x.Id,
@@ -69,10 +77,9 @@ public async Task<EmployeeBeatResponse> CreateAsync(
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-
     public async Task<IReadOnlyList<EmployeeBeatResponse>> GetAllAsync(
-    Guid tenantId,
-    CancellationToken cancellationToken = default)
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
     {
         return await _db.EmployeeBeats
             .AsNoTracking()
@@ -92,19 +99,13 @@ public async Task<EmployeeBeatResponse> CreateAsync(
             .ToListAsync(cancellationToken);
     }
 
-
-
     public async Task<bool> EmployeeExistsAsync(
         Guid employeeId,
         Guid tenantId,
         CancellationToken cancellationToken = default)
     {
         return await _db.Employees
-            .AnyAsync(
-                x =>
-                    x.Id == employeeId &&
-                    x.User.TenantId == tenantId,
-                cancellationToken);
+            .AnyAsync(x => x.Id == employeeId && x.User.TenantId == tenantId, cancellationToken);
     }
 
     public async Task<bool> BeatExistsAsync(
@@ -113,11 +114,7 @@ public async Task<EmployeeBeatResponse> CreateAsync(
         CancellationToken cancellationToken = default)
     {
         return await _db.Beats
-            .AnyAsync(
-                x =>
-                    x.Id == beatId &&
-                    x.TenantId == tenantId,
-                cancellationToken);
+            .AnyAsync(x => x.Id == beatId && x.TenantId == tenantId, cancellationToken);
     }
 
     public async Task<bool> HasActiveAssignmentAsync(
@@ -125,27 +122,11 @@ public async Task<EmployeeBeatResponse> CreateAsync(
         CancellationToken cancellationToken = default)
     {
         return await _db.EmployeeBeats
-            .AnyAsync(
-                x =>
-                    x.EmployeeId == employeeId &&
-                    x.IsActive,
-                cancellationToken);
+            .AnyAsync(x => x.EmployeeId == employeeId && x.IsActive, cancellationToken);
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        return ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505";
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
