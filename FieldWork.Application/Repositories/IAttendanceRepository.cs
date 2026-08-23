@@ -1,6 +1,7 @@
 ﻿
 using FieldWork.Application.DTOs.Attendances;
 using FieldWork.Application.DTOs.Common;
+using FieldWork.Domain.Enums;
 
 namespace FieldWork.Application.Repositories;
 
@@ -24,7 +25,7 @@ public interface IAttendanceRepository
      int pageSize,
      CancellationToken cancellationToken = default);
 
-    Task<string?> GetLatestActionAsync(
-        Guid employeeId,
-        CancellationToken cancellationToken = default);
+    Task<AttendanceAction?> GetLatestActionAsync(
+    Guid employeeId,
+    CancellationToken cancellationToken = default);
 }

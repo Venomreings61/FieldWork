@@ -1,4 +1,5 @@
 ﻿using FieldWork.Application.DTOs.Attendances;
+using FieldWork.Domain.Enums;
 using FieldWork.Application.DTOs.Common;
 using FieldWork.Application.Repositories;
 using FieldWork.Domain.Entities;
@@ -57,14 +58,14 @@ public class AttendanceRepository : IAttendanceRepository
             EmployeeId = employeeId,
             BeatId = beatId,
             ClientAttendanceId = request.ClientAttendanceId,
-            Action = request.Action,
-            RecordedAt = request.RecordedAt.Value,
+            Action = request.Action!.Value,
+            RecordedAt = request.RecordedAt!.Value,
             ReceivedAt = receivedAt,
             Latitude = request.Latitude,
             Longitude = request.Longitude,
             AccuracyMeters = request.AccuracyMeters,
-            Source = request.Source,
-            SyncStatus = "Synced",
+            Source = request.Source!.Value,
+            SyncStatus = FieldWork.Domain.Enums.SyncStatus.Synced,
             IsWithinGeofence = isWithinGeofence,
             CreatedAt = receivedAt
         };
@@ -162,7 +163,7 @@ public class AttendanceRepository : IAttendanceRepository
         };
     }
 
-    public async Task<string?> GetLatestActionAsync(
+    public async Task<AttendanceAction?> GetLatestActionAsync(
      Guid employeeId,
      CancellationToken cancellationToken = default)
     {
@@ -170,7 +171,7 @@ public class AttendanceRepository : IAttendanceRepository
             .AsNoTracking()
             .Where(x => x.EmployeeId == employeeId)
             .OrderByDescending(x => x.ReceivedAt)
-            .Select(x => x.Action)
+            .Select(x => (AttendanceAction?)x.Action)
             .FirstOrDefaultAsync(cancellationToken);
     }
 }

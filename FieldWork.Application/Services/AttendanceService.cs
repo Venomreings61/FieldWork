@@ -3,6 +3,7 @@ using FieldWork.Application.DTOs.Common;
 using FieldWork.Application.Exceptions;
 using FieldWork.Application.Repositories;
 using FieldWork.Application.Security;
+using FieldWork.Domain.Enums;
 
 namespace FieldWork.Application.Services;
 
@@ -37,8 +38,7 @@ public class AttendanceService : IAttendanceService
     {
         if (!_currentUser.IsAuthenticated)
         {
-            throw new UnauthorizedAccessException(
-                "User is not authenticated.");
+            throw new UnauthorizedAccessException("User is not authenticated.");
         }
 
         var employee = await _employeeRepository.GetByUserIdAsync(
@@ -53,13 +53,10 @@ public class AttendanceService : IAttendanceService
                 "Employee was not found in the current tenant.");
         }
 
-        if (!string.Equals(request.Action, "CHECK_IN", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(request.Action, "CHECK_OUT", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new BusinessRuleException(
-                "ATTENDANCE_INVALID_ACTION",
-                "Invalid attendance action.");
-        }
+        // Action/Source are now guaranteed valid enum values by model binding —
+        // an invalid or missing value never reaches this point (rejected as 400 earlier).
+        var action = request.Action!.Value;
+        var source = request.Source!.Value;
 
         var existingAttendance =
             await _attendanceRepository.GetByClientAttendanceIdAsync(
@@ -115,24 +112,21 @@ public class AttendanceService : IAttendanceService
             employee.Id,
             cancellationToken);
 
-        if (latestAction is null &&
-            request.Action == "CHECK_OUT")
+        if (latestAction is null && action == AttendanceAction.CHECK_OUT)
         {
             throw new ConflictException(
                 "ATTENDANCE_CHECKOUT_WITHOUT_CHECKIN",
                 "Employee must check in before checking out.");
         }
 
-        if (latestAction == "CHECK_IN" &&
-            request.Action == "CHECK_IN")
+        if (latestAction == AttendanceAction.CHECK_IN && action == AttendanceAction.CHECK_IN)
         {
             throw new ConflictException(
                 "ATTENDANCE_ALREADY_CHECKED_IN",
                 "Employee is already checked in.");
         }
 
-        if (latestAction == "CHECK_OUT" &&
-            request.Action == "CHECK_OUT")
+        if (latestAction == AttendanceAction.CHECK_OUT && action == AttendanceAction.CHECK_OUT)
         {
             throw new ConflictException(
                 "ATTENDANCE_ALREADY_CHECKED_OUT",

@@ -1,5 +1,5 @@
-﻿
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
+using FieldWork.Domain.Enums;
 
 namespace FieldWork.Application.DTOs.Attendances;
 
@@ -9,7 +9,7 @@ public class CreateAttendanceRequest
     public string ClientAttendanceId { get; set; } = string.Empty;
 
     [Required]
-    public string Action { get; set; } = string.Empty;
+    public AttendanceAction? Action { get; set; }
 
     [Required]
     public DateTimeOffset? RecordedAt { get; set; }
@@ -24,6 +24,5 @@ public class CreateAttendanceRequest
     public decimal? AccuracyMeters { get; set; }
 
     [Required]
-    public string Source { get; set; } = string.Empty;
+    public AttendanceSource? Source { get; set; }
 }
-
