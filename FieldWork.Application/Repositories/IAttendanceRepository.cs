@@ -2,6 +2,7 @@
 using FieldWork.Application.DTOs.Attendances;
 using FieldWork.Application.DTOs.Common;
 using FieldWork.Domain.Enums;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FieldWork.Application.Repositories;
 
@@ -28,4 +29,8 @@ public interface IAttendanceRepository
     Task<AttendanceAction?> GetLatestActionAsync(
     Guid employeeId,
     CancellationToken cancellationToken = default);
+
+    Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
+
+    Task AcquireEmployeeLockAsync(Guid employeeId, CancellationToken cancellationToken = default);
 }

@@ -33,8 +33,8 @@ public class AttendanceService : IAttendanceService
     }
 
     public async Task<AttendanceResponse> CreateAsync(
-        CreateAttendanceRequest request,
-        CancellationToken cancellationToken = default)
+    CreateAttendanceRequest request,
+    CancellationToken cancellationToken = default)
     {
         if (!_currentUser.IsAuthenticated)
         {
@@ -48,15 +48,15 @@ public class AttendanceService : IAttendanceService
 
         if (employee is null)
         {
-            throw new NotFoundException(
-                "EMPLOYEE_NOT_FOUND",
-                "Employee was not found in the current tenant.");
+            throw new NotFoundException("EMPLOYEE_NOT_FOUND", "Employee was not found in the current tenant.");
         }
 
-        // Action/Source are now guaranteed valid enum values by model binding —
-        // an invalid or missing value never reaches this point (rejected as 400 earlier).
         var action = request.Action!.Value;
         var source = request.Source!.Value;
+
+        // Everything from here on must be atomic per-employee.
+        await using var transaction = await _attendanceRepository.BeginTransactionAsync(cancellationToken);
+        await _attendanceRepository.AcquireEmployeeLockAsync(employee.Id, cancellationToken);
 
         var existingAttendance =
             await _attendanceRepository.GetByClientAttendanceIdAsync(
@@ -65,83 +65,60 @@ public class AttendanceService : IAttendanceService
 
         if (existingAttendance is not null)
         {
-            return existingAttendance;
+            return existingAttendance; // transaction disposes/rolls back harmlessly, nothing was written
         }
 
         var activeBeat =
-            await _employeeBeatRepository.GetActiveByEmployeeAsync(
-                employee.Id,
-                cancellationToken);
+            await _employeeBeatRepository.GetActiveByEmployeeAsync(employee.Id, cancellationToken);
 
         if (activeBeat is null)
         {
-            throw new BusinessRuleException(
-                "ATTENDANCE_NO_ACTIVE_BEAT",
-                "Employee does not have an active beat assignment.");
+            throw new BusinessRuleException("ATTENDANCE_NO_ACTIVE_BEAT", "Employee does not have an active beat assignment.");
         }
 
-        var beat = await _beatRepository.GetByIdAsync(
-            activeBeat.BeatId,
-            _currentUser.TenantId,
-            cancellationToken);
+        var beat = await _beatRepository.GetByIdAsync(activeBeat.BeatId, _currentUser.TenantId, cancellationToken);
 
         if (beat is null)
         {
-            throw new NotFoundException(
-                "BEAT_NOT_FOUND",
-                "Assigned beat was not found in the current tenant.");
+            throw new NotFoundException("BEAT_NOT_FOUND", "Assigned beat was not found in the current tenant.");
         }
 
         var beatId = beat.Id;
 
         var isWithinGeofence = _geofenceService.IsWithinRadius(
-            request.Latitude,
-            request.Longitude,
-            beat.CenterLatitude,
-            beat.CenterLongitude,
-            beat.RadiusMeters);
+            request.Latitude, request.Longitude,
+            beat.CenterLatitude, beat.CenterLongitude, beat.RadiusMeters);
 
         if (!isWithinGeofence)
         {
-            throw new BusinessRuleException(
-                "ATTENDANCE_OUTSIDE_GEOFENCE",
-                "Employee is outside the assigned beat geofence.");
+            throw new BusinessRuleException("ATTENDANCE_OUTSIDE_GEOFENCE", "Employee is outside the assigned beat geofence.");
         }
 
-        var latestAction = await _attendanceRepository.GetLatestActionAsync(
-            employee.Id,
-            cancellationToken);
+        var latestAction = await _attendanceRepository.GetLatestActionAsync(employee.Id, cancellationToken);
 
         if (latestAction is null && action == AttendanceAction.CHECK_OUT)
         {
-            throw new ConflictException(
-                "ATTENDANCE_CHECKOUT_WITHOUT_CHECKIN",
-                "Employee must check in before checking out.");
+            throw new ConflictException("ATTENDANCE_CHECKOUT_WITHOUT_CHECKIN", "Employee must check in before checking out.");
         }
 
         if (latestAction == AttendanceAction.CHECK_IN && action == AttendanceAction.CHECK_IN)
         {
-            throw new ConflictException(
-                "ATTENDANCE_ALREADY_CHECKED_IN",
-                "Employee is already checked in.");
+            throw new ConflictException("ATTENDANCE_ALREADY_CHECKED_IN", "Employee is already checked in.");
         }
 
         if (latestAction == AttendanceAction.CHECK_OUT && action == AttendanceAction.CHECK_OUT)
         {
-            throw new ConflictException(
-                "ATTENDANCE_ALREADY_CHECKED_OUT",
-                "Employee is already checked out.");
+            throw new ConflictException("ATTENDANCE_ALREADY_CHECKED_OUT", "Employee is already checked out.");
         }
 
         var receivedAt = DateTimeOffset.UtcNow;
 
-        return await _attendanceRepository.CreateAsync(
-            employee.Id,
-            beatId,
-            request,
-            receivedAt,
-            isWithinGeofence,
-            cancellationToken);
+        var result = await _attendanceRepository.CreateAsync(
+            employee.Id, beatId, request, receivedAt, isWithinGeofence, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return result;
     }
 
     public async Task<PagedResult<AttendanceResponse>> GetMyAttendanceAsync(

@@ -5,6 +5,7 @@ using FieldWork.Application.Repositories;
 using FieldWork.Domain.Entities;
 using FieldWork.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FieldWork.Infrastructure.Repositories;
 
@@ -174,6 +175,25 @@ public class AttendanceRepository : IAttendanceRepository
             .OrderByDescending(x => x.ReceivedAt)
             .Select(x => (AttendanceAction?)x.Action)
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+
+    public async Task<IDbContextTransaction> BeginTransactionAsync(
+    CancellationToken cancellationToken = default)
+    {
+        return await _db.Database.BeginTransactionAsync(cancellationToken);
+    }
+
+    public async Task AcquireEmployeeLockAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        // Postgres advisory locks take a bigint key; hash the Guid down to one.
+        // pg_advisory_xact_lock automatically releases when the transaction ends
+        // (commit or rollback) — no manual unlock needed.
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtext({employeeId.ToString()}))",
+            cancellationToken);
     }
 }
 
