@@ -32,15 +32,18 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(x => x.CreatedAt)
             .IsRequired();
 
-        builder.HasIndex(x => x.EmployeeCode)
+        // Tenant-scoped uniqueness, replacing the old global-unique index
+        builder.HasIndex(x => new { x.TenantId, x.EmployeeCode })
             .IsUnique();
 
-       
-  builder.HasOne(x => x.User)
-    .WithOne()
-    .HasForeignKey<Employee>(x => x.UserId)
-    .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.User)
+            .WithOne()
+            .HasForeignKey<Employee>(x => x.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(x => x.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

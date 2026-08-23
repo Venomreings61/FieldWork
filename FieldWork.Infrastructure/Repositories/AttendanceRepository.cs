@@ -128,7 +128,8 @@ public class AttendanceRepository : IAttendanceRepository
         var query = _db.Attendances
             .AsNoTracking()
             .Where(x => x.EmployeeId == employeeId)
-            .OrderByDescending(x => x.RecordedAt);
+            //.OrderByDescending(x => x.RecordedAt);
+            .OrderByDescending(x => x.ReceivedAt);
 
         var totalCount = await query.CountAsync(cancellationToken);
 

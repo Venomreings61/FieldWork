@@ -1,9 +1,7 @@
-﻿
-using FieldWork.Application.DTOs.Employees;
+﻿using FieldWork.Application.DTOs.Employees;
 using FieldWork.Application.Repositories;
 using FieldWork.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
 
 namespace FieldWork.Infrastructure.Repositories;
 
@@ -22,7 +20,7 @@ public class EmployeeRepository : IEmployeeRepository
     {
         return await _db.Employees
             .AsNoTracking()
-            .Where(x => x.User.TenantId == tenantId)
+            .Where(x => x.TenantId == tenantId)
             .OrderBy(x => x.EmployeeCode)
             .Select(x => new EmployeeResponse
             {
@@ -46,7 +44,7 @@ public class EmployeeRepository : IEmployeeRepository
             .AsNoTracking()
             .Where(x =>
                 x.Id == employeeId &&
-                x.User.TenantId == tenantId)
+                x.TenantId == tenantId)
             .Select(x => new EmployeeResponse
             {
                 Id = x.Id,
@@ -61,15 +59,15 @@ public class EmployeeRepository : IEmployeeRepository
     }
 
     public async Task<EmployeeResponse?> GetByUserIdAsync(
-    Guid userId,
-    Guid tenantId,
-    CancellationToken cancellationToken = default)
+        Guid userId,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
     {
         return await _db.Employees
             .AsNoTracking()
             .Where(x =>
                 x.UserId == userId &&
-                x.User.TenantId == tenantId)
+                x.TenantId == tenantId)
             .Select(x => new EmployeeResponse
             {
                 Id = x.Id,

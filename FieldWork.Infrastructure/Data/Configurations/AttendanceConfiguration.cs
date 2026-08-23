@@ -49,6 +49,7 @@ public class AttendanceConfiguration : IEntityTypeConfiguration<Attendance>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => x.ClientAttendanceId).IsUnique();
-        builder.HasIndex(x => new { x.EmployeeId, x.RecordedAt });
+       // builder.HasIndex(x => new { x.EmployeeId, x.RecordedAt });
+        builder.HasIndex(x => new { x.EmployeeId, x.ReceivedAt });
     }
 }

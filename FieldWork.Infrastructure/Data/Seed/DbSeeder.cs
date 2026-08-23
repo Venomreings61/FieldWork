@@ -61,6 +61,7 @@ public static class DbSeeder
             {
                 Id = Guid.NewGuid(),
                 UserId = userA.Id,
+                TenantId = tenantA.Id,   // ADD THIS LINE
                 EmployeeCode = "EMP001",
                 FirstName = "Demo",
                 LastName = "Employee",
@@ -180,6 +181,7 @@ public static class DbSeeder
             {
                 Id = Guid.NewGuid(),
                 UserId = userB.Id,
+                TenantId = tenantB.Id,   // ADD THIS LINE
                 EmployeeCode = "EMP002",
                 FirstName = "TenantB",
                 LastName = "Employee",

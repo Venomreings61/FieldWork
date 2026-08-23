@@ -36,7 +36,7 @@ builder.HasOne(x => x.Employee)
 
 
 
-        builder.HasIndex(x => new { x.EmployeeId, x.BeatId });
+       // builder.HasIndex(x => new { x.EmployeeId, x.BeatId });
 
         builder.HasIndex(x => x.EmployeeId)
     .IsUnique()
