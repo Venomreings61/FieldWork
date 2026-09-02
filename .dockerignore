@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+.git/
+.gitignore
+*.md
+*.user
+Dockerfile
+.dockerignore
+docker-compose.yml
+**/Properties/launchSettings.json
+FieldWork.Tests/

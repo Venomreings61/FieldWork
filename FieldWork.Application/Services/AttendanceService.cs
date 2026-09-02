@@ -1,9 +1,10 @@
-﻿using FieldWork.Application.DTOs.Attendances;
+using FieldWork.Application.DTOs.Attendances;
 using FieldWork.Application.DTOs.Common;
 using FieldWork.Application.Exceptions;
 using FieldWork.Application.Repositories;
 using FieldWork.Application.Security;
 using FieldWork.Domain.Enums;
+using Microsoft.Extensions.Logging;
 
 namespace FieldWork.Application.Services;
 
@@ -15,6 +16,7 @@ public class AttendanceService : IAttendanceService
     private readonly ICurrentUser _currentUser;
     private readonly IGeofenceService _geofenceService;
     private readonly IBeatRepository _beatRepository;
+    private readonly ILogger<AttendanceService> _logger;
 
     public AttendanceService(
         IAttendanceRepository attendanceRepository,
@@ -22,7 +24,8 @@ public class AttendanceService : IAttendanceService
         IEmployeeBeatRepository employeeBeatRepository,
         IBeatRepository beatRepository,
         ICurrentUser currentUser,
-        IGeofenceService geofenceService)
+        IGeofenceService geofenceService,
+        ILogger<AttendanceService> logger)
     {
         _attendanceRepository = attendanceRepository;
         _employeeRepository = employeeRepository;
@@ -30,11 +33,16 @@ public class AttendanceService : IAttendanceService
         _beatRepository = beatRepository;
         _currentUser = currentUser;
         _geofenceService = geofenceService;
+        _logger = logger;
     }
 
+   
+
+    // constructor: add ILogger<AttendanceService> logger, assign _logger = logger;
+
     public async Task<AttendanceResponse> CreateAsync(
-    CreateAttendanceRequest request,
-    CancellationToken cancellationToken = default)
+     CreateAttendanceRequest request,
+     CancellationToken cancellationToken = default)
     {
         if (!_currentUser.IsAuthenticated)
         {
@@ -42,9 +50,7 @@ public class AttendanceService : IAttendanceService
         }
 
         var employee = await _employeeRepository.GetByUserIdAsync(
-            _currentUser.UserId,
-            _currentUser.TenantId,
-            cancellationToken);
+            _currentUser.UserId, _currentUser.TenantId, cancellationToken);
 
         if (employee is null)
         {
@@ -54,25 +60,27 @@ public class AttendanceService : IAttendanceService
         var action = request.Action!.Value;
         var source = request.Source!.Value;
 
-        // Everything from here on must be atomic per-employee.
         await using var transaction = await _attendanceRepository.BeginTransactionAsync(cancellationToken);
         await _attendanceRepository.AcquireEmployeeLockAsync(employee.Id, cancellationToken);
 
-        var existingAttendance =
-            await _attendanceRepository.GetByClientAttendanceIdAsync(
-                request.ClientAttendanceId,
-                cancellationToken);
+        var existingAttendance = await _attendanceRepository.GetByClientAttendanceIdAsync(
+            request.ClientAttendanceId, cancellationToken);
 
         if (existingAttendance is not null)
         {
-            return existingAttendance; // transaction disposes/rolls back harmlessly, nothing was written
+            _logger.LogInformation(
+                "Duplicate attendance request returned existing record. EmployeeId: {EmployeeId}, ClientAttendanceId: {ClientAttendanceId}.",
+                employee.Id, request.ClientAttendanceId);
+            return existingAttendance;
         }
 
-        var activeBeat =
-            await _employeeBeatRepository.GetActiveByEmployeeAsync(employee.Id, cancellationToken);
+        var activeBeat = await _employeeBeatRepository.GetActiveByEmployeeAsync(employee.Id, cancellationToken);
 
         if (activeBeat is null)
         {
+            _logger.LogWarning(
+                "Attendance rejected: no active beat assignment. EmployeeId: {EmployeeId}, TenantId: {TenantId}.",
+                employee.Id, _currentUser.TenantId);
             throw new BusinessRuleException("ATTENDANCE_NO_ACTIVE_BEAT", "Employee does not have an active beat assignment.");
         }
 
@@ -91,6 +99,9 @@ public class AttendanceService : IAttendanceService
 
         if (!isWithinGeofence)
         {
+            _logger.LogWarning(
+                "Attendance rejected: outside geofence. EmployeeId: {EmployeeId}, BeatId: {BeatId}, Action: {Action}.",
+                employee.Id, beatId, action);
             throw new BusinessRuleException("ATTENDANCE_OUTSIDE_GEOFENCE", "Employee is outside the assigned beat geofence.");
         }
 
@@ -103,6 +114,8 @@ public class AttendanceService : IAttendanceService
 
         if (latestAction == AttendanceAction.CHECK_IN && action == AttendanceAction.CHECK_IN)
         {
+            _logger.LogInformation(
+                "Attendance rejected: duplicate CHECK_IN. EmployeeId: {EmployeeId}.", employee.Id);
             throw new ConflictException("ATTENDANCE_ALREADY_CHECKED_IN", "Employee is already checked in.");
         }
 
@@ -117,6 +130,10 @@ public class AttendanceService : IAttendanceService
             employee.Id, beatId, request, receivedAt, isWithinGeofence, cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Attendance created. EmployeeId: {EmployeeId}, TenantId: {TenantId}, BeatId: {BeatId}, Action: {Action}, AttendanceId: {AttendanceId}.",
+            employee.Id, _currentUser.TenantId, beatId, action, result.Id);
 
         return result;
     }

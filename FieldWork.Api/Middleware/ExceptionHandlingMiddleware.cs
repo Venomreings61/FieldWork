@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using FieldWork.Application.Exceptions;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace FieldWork.Api.Middleware;
 
@@ -27,13 +28,25 @@ public class ExceptionHandlingMiddleware
         {
             var (statusCode, title, code) = MapException(ex);
 
-            if (statusCode == StatusCodes.Status500InternalServerError)
+            var tenantId = context.User.FindFirst("tenantId")?.Value ?? "unknown";
+            var userId = context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous";
+
+            using (_logger.BeginScope(new Dictionary<string, object>
             {
-                _logger.LogError(ex, "Unhandled exception.");
-            }
-            else
+                ["TenantId"] = tenantId,
+                ["UserId"] = userId,
+                ["RequestPath"] = context.Request.Path.ToString(),
+                ["TraceId"] = context.TraceIdentifier
+            }))
             {
-                _logger.LogWarning(ex, "{Title}", title);
+                if (statusCode == StatusCodes.Status500InternalServerError)
+                {
+                    _logger.LogError(ex, "Unhandled exception.");
+                }
+                else
+                {
+                    _logger.LogWarning(ex, "{Title}", title);
+                }
             }
 
             var problemDetails = new ProblemDetails

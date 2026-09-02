@@ -1,59 +1,87 @@
+using System.Text;
+using FieldWork.Api.HealthChecks;
+using FieldWork.Api.Middleware;
 using FieldWork.Application.Authentication;
 using FieldWork.Application.Repositories;
 using FieldWork.Application.Security;
 using FieldWork.Application.Services;
 using FieldWork.Infrastructure.Data;
+using FieldWork.Infrastructure.HealthChecks;
 using FieldWork.Infrastructure.Repositories;
 using FieldWork.Infrastructure.Security;
 using FieldWork.Infrastructure.Seed;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi;
-using FieldWork.Api.Middleware;
-using System.Text;
-
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddControllers();
+// 1. Controllers & JSON Options
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(
             new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
 
+// 2. Database Context
+var dbConnectionString = builder.Configuration.GetConnectionString("FieldWorkDb")
+    ?? throw new InvalidOperationException("Database connection string 'FieldWorkDb' is missing.");
 
 builder.Services.AddDbContext<FieldWorkDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("FieldWorkDb")));
+    options.UseNpgsql(dbConnectionString));
 
+// 3. Health Checks Configuration
+//var dbConnectionString = builder.Configuration.GetConnectionString("FieldWorkDb")
+//    ?? throw new InvalidOperationException("Connection string 'FieldWorkDb' not found.");
+
+builder.Services.AddHealthChecks()
+    .AddNpgSql(
+        dbConnectionString,
+        name: "postgresql",
+        tags: new[] { "ready" },
+        timeout: TimeSpan.FromSeconds(5))
+    .AddCheck<PostGisHealthCheck>(
+        name: "postgis",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: new[] { "ready" },
+        timeout: TimeSpan.FromSeconds(5));
+
+// 4. CORS Policy Configuration
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader());
+});
+
+// 5. Application Services & Repositories
 builder.Services.AddHttpContextAccessor();
-
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-builder.Services.Configure<JwtSettings>(
-    builder.Configuration.GetSection("Jwt"));
-
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<IBeatRepository, BeatRepository>();
 builder.Services.AddScoped<IEmployeeBeatRepository, EmployeeBeatRepository>();
-builder.Services.AddScoped<IEmployeeBeatService, EmployeeBeatService>();
+builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IBeatService, BeatService>();
-builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+builder.Services.AddScoped<IEmployeeBeatService, EmployeeBeatService>();
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 builder.Services.AddScoped<IGeofenceService, GeofenceService>();
 
+// 6. JWT Authentication
 var jwtSettings = builder.Configuration
     .GetSection("Jwt")
     .Get<JwtSettings>()
@@ -63,36 +91,38 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-
-        ValidIssuer = jwtSettings.Issuer,
-        ValidAudience = jwtSettings.Audience,
-
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(jwtSettings.SecretKey))
-    };
-
-    options.Events = new JwtBearerEvents
-    {
-        OnAuthenticationFailed = context =>
+        options.TokenValidationParameters = new TokenValidationParameters
         {
-            Console.WriteLine("JWT AUTHENTICATION FAILED:");
-            Console.WriteLine(context.Exception.Message);
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ClockSkew = TimeSpan.Zero, // Eliminates default 5-min grace period on token expiration
 
-            return Task.CompletedTask;
-        }
-    };
-});
+            ValidIssuer = jwtSettings.Issuer,
+            ValidAudience = jwtSettings.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSettings.SecretKey))
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JwtAuthentication");
+
+                logger.LogWarning(context.Exception, "JWT authentication failed.");
+                return Task.CompletedTask;
+            }
+        };
+    });
 
 builder.Services.AddAuthorization();
 
+// 7. Swagger / OpenAPI Configuration
 builder.Services.AddEndpointsApiExplorer();
-
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -102,7 +132,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Enter your JWT token."
+        Description = "Enter your JWT Bearer token."
     });
 
     options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
@@ -113,42 +143,61 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    var passwordHasher =
-        scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+// 8. Global Middleware Pipeline
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-    var hash = passwordHasher.Hash("Password@123");
-
-    Console.WriteLine("DEV PASSWORD HASH:");
-    Console.WriteLine(hash);
-}
-
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider
-        .GetRequiredService<FieldWorkDbContext>();
-
-    var passwordHasher = scope.ServiceProvider
-        .GetRequiredService<IPasswordHasher>();
-
-    await DbSeeder.SeedAsync(db, passwordHasher);
-}
-
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "FieldWork API v1");
+        c.RoutePrefix = "swagger";
+    });
+
+    // Single unified development scope for database seeding
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<FieldWorkDbContext>();
+    var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    await db.Database.MigrateAsync();
+    await DbSeeder.SeedAsync(db, passwordHasher);
+
+    var devHash = passwordHasher.Hash("Password@123");
+    logger.LogInformation("Development setup complete. Sample Hash: {Hash}", devHash);
 }
 
 app.UseHttpsRedirection();
-
-app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+// 9. Health Check Endpoints (Bypasses authentication filters by default)
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = r => r.Tags.Contains("ready"),
+    ResponseWriter = HealthResponseWriter.WriteJson,
+    AllowCachingResponses = false
+});
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        Predicate = _ => true,
+        ResponseWriter = HealthResponseWriter.WriteJson,
+        AllowCachingResponses = false
+    });
+}
+
+// 10. Controller Route Mapping
 app.MapControllers();
+
 app.Run();
