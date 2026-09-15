@@ -55,5 +55,18 @@ jobs:
           docker compose logs db face-service
           exit 1
 
+
+      - name: Verify integration test dependencies
+        run: |
+          echo "=== Docker Compose status ==="
+          docker compose ps
+
+          echo "=== PostgreSQL port ==="
+          nc -zv 127.0.0.1 5433
+
+          echo "=== Face service health ==="
+          curl --fail --show-error http://127.0.0.1:8500/health/ready
+
       - name: Test
         run: dotnet test FieldWork.slnx --configuration Release --no-build
+
