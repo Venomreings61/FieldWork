@@ -1,3 +1,4 @@
+using FieldWork.Application.Configuration;
 using FieldWork.Application.DTOs.Attendances;
 using FieldWork.Application.DTOs.Common;
 using FieldWork.Application.Exceptions;
@@ -5,6 +6,7 @@ using FieldWork.Application.Repositories;
 using FieldWork.Application.Security;
 using FieldWork.Domain.Enums;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FieldWork.Application.Services;
 
@@ -14,8 +16,12 @@ public class AttendanceService : IAttendanceService
     private readonly IEmployeeRepository _employeeRepository;
     private readonly IEmployeeBeatRepository _employeeBeatRepository;
     private readonly ICurrentUser _currentUser;
-    private readonly IGeofenceService _geofenceService;
+    private readonly IGeofenceRepository _geofenceRepository;
     private readonly IBeatRepository _beatRepository;
+    private readonly ITenantRepository _tenantRepository;
+    private readonly IFaceEmbeddingRepository _faceEmbeddingRepository;
+    private readonly IFaceVerificationService _faceVerificationService;
+    private readonly double _faceVerificationThreshold;
     private readonly ILogger<AttendanceService> _logger;
 
     public AttendanceService(
@@ -23,26 +29,30 @@ public class AttendanceService : IAttendanceService
         IEmployeeRepository employeeRepository,
         IEmployeeBeatRepository employeeBeatRepository,
         IBeatRepository beatRepository,
+        ITenantRepository tenantRepository,
+        IFaceEmbeddingRepository faceEmbeddingRepository,
+        IFaceVerificationService faceVerificationService,
+        IOptions<FaceVerificationOptions> faceVerificationOptions,
         ICurrentUser currentUser,
-        IGeofenceService geofenceService,
+        IGeofenceRepository geofenceRepository,
         ILogger<AttendanceService> logger)
     {
         _attendanceRepository = attendanceRepository;
         _employeeRepository = employeeRepository;
         _employeeBeatRepository = employeeBeatRepository;
         _beatRepository = beatRepository;
+        _tenantRepository = tenantRepository;
+        _faceEmbeddingRepository = faceEmbeddingRepository;
+        _faceVerificationService = faceVerificationService;
+        _faceVerificationThreshold = faceVerificationOptions.Value.AttendanceThreshold;
         _currentUser = currentUser;
-        _geofenceService = geofenceService;
+        _geofenceRepository = geofenceRepository;
         _logger = logger;
     }
 
-   
-
-    // constructor: add ILogger<AttendanceService> logger, assign _logger = logger;
-
     public async Task<AttendanceResponse> CreateAsync(
-     CreateAttendanceRequest request,
-     CancellationToken cancellationToken = default)
+        CreateAttendanceRequest request,
+        CancellationToken cancellationToken = default)
     {
         if (!_currentUser.IsAuthenticated)
         {
@@ -71,6 +81,8 @@ public class AttendanceService : IAttendanceService
             _logger.LogInformation(
                 "Duplicate attendance request returned existing record. EmployeeId: {EmployeeId}, ClientAttendanceId: {ClientAttendanceId}.",
                 employee.Id, request.ClientAttendanceId);
+
+            await transaction.CommitAsync(cancellationToken);
             return existingAttendance;
         }
 
@@ -93,9 +105,8 @@ public class AttendanceService : IAttendanceService
 
         var beatId = beat.Id;
 
-        var isWithinGeofence = _geofenceService.IsWithinRadius(
-            request.Latitude, request.Longitude,
-            beat.CenterLatitude, beat.CenterLongitude, beat.RadiusMeters);
+        var isWithinGeofence = await _geofenceRepository.IsPointWithinBeatPolygonAsync(
+            beatId, request.Latitude, request.Longitude, cancellationToken);
 
         if (!isWithinGeofence)
         {
@@ -124,6 +135,58 @@ public class AttendanceService : IAttendanceService
             throw new ConflictException("ATTENDANCE_ALREADY_CHECKED_OUT", "Employee is already checked out.");
         }
 
+        // --- Face verification (opt-in, tenant-controlled) ---
+        var faceVerificationRequired = await _tenantRepository.IsFaceVerificationRequiredAsync(
+            _currentUser.TenantId, cancellationToken);
+
+        if (faceVerificationRequired)
+        {
+            if (string.IsNullOrWhiteSpace(request.FaceImageBase64))
+            {
+                throw new BusinessRuleException(
+                    "ATTENDANCE_FACE_IMAGE_REQUIRED",
+                    "A face image is required for attendance in this tenant.");
+            }
+
+            byte[] imageBytes;
+            try
+            {
+                imageBytes = Convert.FromBase64String(request.FaceImageBase64);
+            }
+            catch (FormatException)
+            {
+                throw new BusinessRuleException(
+                    "INVALID_IMAGE",
+                    "The supplied face image is not valid base64 data.");
+            }
+
+            var storedEmbedding = await _faceEmbeddingRepository.GetByEmployeeIdAsync(
+                employee.Id, cancellationToken);
+
+            if (storedEmbedding is null)
+            {
+                throw new NotFoundException(
+                    "FACE_NOT_ENROLLED",
+                    "Employee does not have an enrolled face.");
+            }
+
+            var referenceEmbedding = storedEmbedding.Embedding.ToArray();
+
+
+            var faceResult = await _faceVerificationService.VerifyAsync(
+                imageBytes, referenceEmbedding, _faceVerificationThreshold, cancellationToken);
+
+            if (!faceResult.Matched)
+            {
+                _logger.LogWarning(
+                    "Attendance rejected: face verification failed. EmployeeId: {EmployeeId}, Similarity: {Similarity}.",
+                    employee.Id, faceResult.Similarity);
+                throw new BusinessRuleException(
+                    "ATTENDANCE_FACE_VERIFICATION_FAILED",
+                    "Face verification did not match the enrolled employee.");
+            }
+        }
+
         var receivedAt = DateTimeOffset.UtcNow;
 
         var result = await _attendanceRepository.CreateAsync(
@@ -149,22 +212,14 @@ public class AttendanceService : IAttendanceService
         }
 
         var employee = await _employeeRepository.GetByUserIdAsync(
-            _currentUser.UserId,
-            _currentUser.TenantId,
-            cancellationToken);
+            _currentUser.UserId, _currentUser.TenantId, cancellationToken);
 
         if (employee is null)
         {
             throw new NotFoundException("EMPLOYEE_NOT_FOUND", "Employee was not found in the current tenant.");
         }
 
-        page = Math.Max(page, 1);
-        pageSize = Math.Clamp(pageSize, 1, 100);
-
         return await _attendanceRepository.GetByEmployeeAsync(
-            employee.Id,
-            page,
-            pageSize,
-            cancellationToken);
+            employee.Id, page, pageSize, cancellationToken);
     }
 }

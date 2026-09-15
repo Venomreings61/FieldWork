@@ -1,8 +1,8 @@
 ﻿using FieldWork.Application.DTOs.Attendances;
-using FieldWork.Domain.Enums;
 using FieldWork.Application.DTOs.Common;
 using FieldWork.Application.Repositories;
 using FieldWork.Domain.Entities;
+using FieldWork.Domain.Enums;
 using FieldWork.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -46,12 +46,12 @@ public class AttendanceRepository : IAttendanceRepository
     }
 
     public async Task<AttendanceResponse> CreateAsync(
-     Guid employeeId,
-     Guid? beatId,
-     CreateAttendanceRequest request,
-     DateTimeOffset receivedAt,
-     bool isWithinGeofence,
-     CancellationToken cancellationToken = default)
+        Guid employeeId,
+        Guid? beatId,
+        CreateAttendanceRequest request,
+        DateTimeOffset receivedAt,
+        bool isWithinGeofence,
+        CancellationToken cancellationToken = default)
     {
         var attendance = new Attendance
         {
@@ -66,7 +66,7 @@ public class AttendanceRepository : IAttendanceRepository
             Longitude = request.Longitude,
             AccuracyMeters = request.AccuracyMeters,
             Source = request.Source!.Value,
-            SyncStatus = FieldWork.Domain.Enums.SyncStatus.Synced,
+            SyncStatus = SyncStatus.Synced,
             IsWithinGeofence = isWithinGeofence,
             CreatedAt = receivedAt
         };
@@ -121,15 +121,14 @@ public class AttendanceRepository : IAttendanceRepository
     }
 
     public async Task<PagedResult<AttendanceResponse>> GetByEmployeeAsync(
-     Guid employeeId,
-     int page,
-     int pageSize,
-     CancellationToken cancellationToken = default)
+        Guid employeeId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
     {
         var query = _db.Attendances
             .AsNoTracking()
             .Where(x => x.EmployeeId == employeeId)
-            //.OrderByDescending(x => x.RecordedAt);
             .OrderByDescending(x => x.ReceivedAt);
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -166,8 +165,8 @@ public class AttendanceRepository : IAttendanceRepository
     }
 
     public async Task<AttendanceAction?> GetLatestActionAsync(
-     Guid employeeId,
-     CancellationToken cancellationToken = default)
+        Guid employeeId,
+        CancellationToken cancellationToken = default)
     {
         return await _db.Attendances
             .AsNoTracking()
@@ -177,9 +176,8 @@ public class AttendanceRepository : IAttendanceRepository
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-
     public async Task<IDbContextTransaction> BeginTransactionAsync(
-    CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         return await _db.Database.BeginTransactionAsync(cancellationToken);
     }
@@ -188,14 +186,12 @@ public class AttendanceRepository : IAttendanceRepository
         Guid employeeId,
         CancellationToken cancellationToken = default)
     {
-        // Postgres advisory locks take a bigint key; hash the Guid down to one.
-        // pg_advisory_xact_lock automatically releases when the transaction ends
-        // (commit or rollback) — no manual unlock needed.
+        // Convert the first 8 bytes of the Guid to a 64-bit integer (bigint).
+        // pg_advisory_xact_lock automatically releases when the transaction finishes (commit or rollback).
+        long lockKey = BitConverter.ToInt64(employeeId.ToByteArray(), 0);
+
         await _db.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtext({employeeId.ToString()}))",
+            $"SELECT pg_advisory_xact_lock({lockKey})",
             cancellationToken);
     }
 }
-
-
-

@@ -1,0 +1,10 @@
+# Runtime dependencies
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32
+uniface[cpu]
+opencv-python-headless
+numpy
+
+# Test-only (not needed in the production Docker image)
+# httpx2==2.12.0   # required by starlette.testclient.TestClient

@@ -19,9 +19,15 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" Version="10.0.11" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="10.0.3" />
+    <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
   </ItemGroup>
-
+	
+	<ItemGroup>
+		<PackageReference Include="SharpKml.Core" Version="6.1.0" />
+	</ItemGroup>
+	
   <ItemGroup>
     <ProjectReference Include="..\FieldWork.Application\FieldWork.Application.csproj" />
     <ProjectReference Include="..\FieldWork.Domain\FieldWork.Domain.csproj" />

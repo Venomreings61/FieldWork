@@ -16,6 +16,8 @@ public class FieldWorkDbContext : DbContext
 
     public DbSet<Employee> Employees => Set<Employee>();
 
+    public DbSet<FaceEmbedding> FaceEmbeddings => Set<FaceEmbedding>();
+
     public DbSet<Beat> Beats => Set<Beat>();
 
     public DbSet<EmployeeBeat> EmployeeBeats => Set<EmployeeBeat>();
@@ -28,6 +30,13 @@ public class FieldWorkDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+
+        // Register PostgreSQL extensions
+        modelBuilder.HasPostgresExtension("postgis");
+        modelBuilder.HasPostgresExtension("vector");
+
+        // Apply all entity type configurations from assembly
         modelBuilder.ApplyConfigurationsFromAssembly(
             typeof(FieldWorkDbContext).Assembly);
     }

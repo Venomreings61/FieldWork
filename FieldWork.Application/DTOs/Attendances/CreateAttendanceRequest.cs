@@ -25,4 +25,9 @@ public class CreateAttendanceRequest
 
     [Required]
     public AttendanceSource? Source { get; set; }
+
+    // Required only when the current tenant has FaceVerificationRequired = true.
+    // Ignored entirely otherwise — no [Required] here, since that would break
+    // every existing non-face-verification attendance request.
+    public string? FaceImageBase64 { get; set; }
 }

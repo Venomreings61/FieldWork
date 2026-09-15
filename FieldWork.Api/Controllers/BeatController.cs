@@ -1,4 +1,5 @@
-﻿using FieldWork.Application.Exceptions;
+﻿using FieldWork.Application.DTOs.Beats;
+using FieldWork.Application.Exceptions;
 using FieldWork.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -35,5 +36,42 @@ public class BeatController : ControllerBase
         }
 
         return Ok(beat);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create(
+    [FromBody] CreateBeatRequest request,
+    CancellationToken cancellationToken)
+    {
+        var result = await _beatService.CreateAsync(request, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(
+        Guid id,
+        [FromBody] UpdateBeatRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _beatService.UpdateAsync(id, request, cancellationToken);
+        return Ok(result);
+    }
+
+    // BeatController.cs
+    [HttpPost("import-kml")]
+    public async Task<IActionResult> ImportKml(
+        [FromForm] string code,
+        [FromForm] string? name,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            throw new BusinessRuleException("KML_FILE_REQUIRED", "A KML file is required.");
+        }
+
+        await using var stream = file.OpenReadStream();
+        var result = await _beatService.CreateFromKmlAsync(code, name, stream, cancellationToken);
+        return Ok(result);
     }
 }

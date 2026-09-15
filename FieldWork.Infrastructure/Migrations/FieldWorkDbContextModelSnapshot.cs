@@ -4,7 +4,9 @@ using FieldWork.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using Pgvector;
 
 #nullable disable
 
@@ -20,6 +22,8 @@ namespace FieldWork.Infrastructure.Migrations
                 .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("EmployeeBeat", b =>
@@ -192,13 +196,10 @@ namespace FieldWork.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<decimal>("CenterLatitude")
-                        .HasPrecision(9, 6)
-                        .HasColumnType("numeric(9,6)");
-
-                    b.Property<decimal>("CenterLongitude")
-                        .HasPrecision(9, 6)
-                        .HasColumnType("numeric(9,6)");
+                    b.Property<Polygon>("BoundaryPolygon")
+                        .IsRequired()
+                        .HasColumnType("geometry(Polygon, 4326)")
+                        .HasColumnName("boundary_polygon");
 
                     b.Property<string>("Code")
                         .IsRequired()
@@ -216,13 +217,14 @@ namespace FieldWork.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<int>("RadiusMeters")
-                        .HasColumnType("integer");
-
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BoundaryPolygon");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("BoundaryPolygon"), "GIST");
 
                     b.HasIndex("TenantId", "Code")
                         .IsUnique();
@@ -277,6 +279,43 @@ namespace FieldWork.Infrastructure.Migrations
                     b.ToTable("employees", (string)null);
                 });
 
+            modelBuilder.Entity("FieldWork.Domain.Entities.FaceEmbedding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Vector>("Embedding")
+                        .IsRequired()
+                        .HasColumnType("vector(512)");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ModelVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId")
+                        .IsUnique();
+
+                    b.ToTable("employee_face_embeddings", (string)null);
+                });
+
             modelBuilder.Entity("FieldWork.Domain.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -290,6 +329,9 @@ namespace FieldWork.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("FaceVerificationRequired")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -432,6 +474,17 @@ namespace FieldWork.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("FieldWork.Domain.Entities.FaceEmbedding", b =>
+                {
+                    b.HasOne("FieldWork.Domain.Entities.Employee", "Employee")
+                        .WithOne("FaceEmbedding")
+                        .HasForeignKey("FieldWork.Domain.Entities.FaceEmbedding", "EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("FieldWork.Domain.Entities.User", b =>
                 {
                     b.HasOne("FieldWork.Domain.Entities.Tenant", null)
@@ -439,6 +492,11 @@ namespace FieldWork.Infrastructure.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("FieldWork.Domain.Entities.Employee", b =>
+                {
+                    b.Navigation("FaceEmbedding");
                 });
 #pragma warning restore 612, 618
         }

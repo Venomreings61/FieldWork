@@ -20,3 +20,12 @@ FieldWork.Api/appsettings.Development.json
 
 # Logs
 *.log
+# Local face/attendance test artifacts
+*.jpg
+*.png
+*.bin
+*_base64.txt
+*_embedding.txt
+enroll-payload.json
+face-openapi.json
+payload*.json

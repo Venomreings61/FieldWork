@@ -2,14 +2,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace FieldWork.Infrastructure.Data.Configurations;
-
 public class BeatConfiguration : IEntityTypeConfiguration<Beat>
 {
     public void Configure(EntityTypeBuilder<Beat> builder)
     {
         builder.ToTable("beats");
-
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Name)
@@ -20,17 +17,6 @@ public class BeatConfiguration : IEntityTypeConfiguration<Beat>
             .IsRequired()
             .HasMaxLength(50);
 
-        builder.Property(x => x.CenterLatitude)
-            .HasPrecision(9, 6)
-            .IsRequired();
-
-        builder.Property(x => x.CenterLongitude)
-            .HasPrecision(9, 6)
-            .IsRequired();
-
-        builder.Property(x => x.RadiusMeters)
-            .IsRequired();
-
         builder.Property(x => x.IsActive)
             .IsRequired();
 
@@ -39,6 +25,14 @@ public class BeatConfiguration : IEntityTypeConfiguration<Beat>
 
         builder.HasIndex(x => new { x.TenantId, x.Code })
             .IsUnique();
+
+        builder.Property(x => x.BoundaryPolygon)
+            .HasColumnName("boundary_polygon")
+            .HasColumnType("geometry(Polygon, 4326)")
+            .IsRequired();
+
+        builder.HasIndex(x => x.BoundaryPolygon)
+            .HasMethod("GIST");
 
         builder.HasOne<Tenant>()
             .WithMany()

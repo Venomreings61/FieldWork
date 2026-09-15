@@ -1,4 +1,3 @@
-using System.Text;
 using FieldWork.Api.HealthChecks;
 using FieldWork.Api.Middleware;
 using FieldWork.Application.Authentication;
@@ -10,12 +9,16 @@ using FieldWork.Infrastructure.HealthChecks;
 using FieldWork.Infrastructure.Repositories;
 using FieldWork.Infrastructure.Security;
 using FieldWork.Infrastructure.Seed;
+using FieldWork.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using System.Text;
+using FieldWork.Application.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,12 +35,13 @@ var dbConnectionString = builder.Configuration.GetConnectionString("FieldWorkDb"
     ?? throw new InvalidOperationException("Database connection string 'FieldWorkDb' is missing.");
 
 builder.Services.AddDbContext<FieldWorkDbContext>(options =>
-    options.UseNpgsql(dbConnectionString));
+    options.UseNpgsql(dbConnectionString, npgsqlOptions =>
+    {
+        npgsqlOptions.UseNetTopologySuite();
+        npgsqlOptions.UseVector();
+    }));
 
 // 3. Health Checks Configuration
-//var dbConnectionString = builder.Configuration.GetConnectionString("FieldWorkDb")
-//    ?? throw new InvalidOperationException("Connection string 'FieldWorkDb' not found.");
-
 builder.Services.AddHealthChecks()
     .AddNpgSql(
         dbConnectionString,
@@ -63,23 +67,34 @@ builder.Services.AddCors(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
-
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
-
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
-
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<IBeatRepository, BeatRepository>();
 builder.Services.AddScoped<IEmployeeBeatRepository, EmployeeBeatRepository>();
 builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
-
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IBeatService, BeatService>();
 builder.Services.AddScoped<IEmployeeBeatService, EmployeeBeatService>();
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
-builder.Services.AddScoped<IGeofenceService, GeofenceService>();
+builder.Services.AddScoped<IGeofenceRepository, GeofenceRepository>();
+builder.Services.AddScoped<IBeatKmlImporter, KmlBeatImporter>();
+builder.Services.AddScoped<IFaceEmbeddingRepository, FaceEmbeddingRepository>();
+builder.Services.AddScoped<IFaceEnrollmentService, FaceEnrollmentService>();
+builder.Services.AddScoped<IFaceEmployeeVerificationService, FaceEmployeeVerificationService>();
+builder.Services.AddScoped<ITenantRepository, TenantRepository>();
+builder.Services.AddScoped<ITenantService, TenantService>();
+
+builder.Services.Configure<FaceVerificationOptions>(builder.Configuration.GetSection("FaceService"));
+
+builder.Services.AddHttpClient<IFaceVerificationService, FaceVerificationService>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<FaceVerificationOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+});
 
 // 6. JWT Authentication
 var jwtSettings = builder.Configuration
@@ -146,6 +161,8 @@ var app = builder.Build();
 // 8. Global Middleware Pipeline
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
+var seedEnabled = builder.Configuration.GetValue<bool>("Seed:Enabled");
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -154,8 +171,10 @@ if (app.Environment.IsDevelopment())
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "FieldWork API v1");
         c.RoutePrefix = "swagger";
     });
+}
 
-    // Single unified development scope for database seeding
+if (seedEnabled)
+{
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<FieldWorkDbContext>();
     var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
@@ -165,12 +184,11 @@ if (app.Environment.IsDevelopment())
     await DbSeeder.SeedAsync(db, passwordHasher);
 
     var devHash = passwordHasher.Hash("Password@123");
-    logger.LogInformation("Development setup complete. Sample Hash: {Hash}", devHash);
+    logger.LogInformation("Seed setup complete. Sample Hash: {Hash}", devHash);
 }
 
 app.UseHttpsRedirection();
 app.UseCors("AllowAll");
-
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -201,3 +219,5 @@ if (app.Environment.IsDevelopment())
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

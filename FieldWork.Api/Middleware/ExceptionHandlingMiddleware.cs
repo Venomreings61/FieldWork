@@ -1,7 +1,7 @@
-﻿using System.Text.Json;
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Text.Json;
 using FieldWork.Application.Exceptions;
 using Microsoft.AspNetCore.Mvc;
-using System.IdentityModel.Tokens.Jwt;
 
 namespace FieldWork.Api.Middleware;
 
@@ -39,9 +39,9 @@ public class ExceptionHandlingMiddleware
                 ["TraceId"] = context.TraceIdentifier
             }))
             {
-                if (statusCode == StatusCodes.Status500InternalServerError)
+                if (statusCode is StatusCodes.Status500InternalServerError or StatusCodes.Status503ServiceUnavailable)
                 {
-                    _logger.LogError(ex, "Unhandled exception.");
+                    _logger.LogError(ex, "Service or server error occurred.");
                 }
                 else
                 {
@@ -54,7 +54,7 @@ public class ExceptionHandlingMiddleware
                 Status = statusCode,
                 Title = title,
                 Detail = ex.Message,
-                Type = $"https://tools.ietf.org/html/rfc9110#section-15.5.{SectionFor(statusCode)}",
+                Type = $"https://tools.ietf.org/html/rfc9110#section-{RfcSectionFor(statusCode)}",
                 Instance = context.Request.Path
             };
 
@@ -74,17 +74,21 @@ public class ExceptionHandlingMiddleware
         BusinessRuleException e => (StatusCodes.Status400BadRequest, "Business rule violation.", e.Code),
         NotFoundException e => (StatusCodes.Status404NotFound, "Resource not found.", e.Code),
         ConflictException e => (StatusCodes.Status409Conflict, "Conflict.", e.Code),
+        ForbiddenException e => (StatusCodes.Status403Forbidden, "Forbidden.", e.Code),
+        FaceServiceUnavailableException e => (StatusCodes.Status503ServiceUnavailable, "Face verification service unavailable.", e.Code),
         UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized.", "UNAUTHORIZED"),
         _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", "INTERNAL_SERVER_ERROR")
     };
 
-    private static int SectionFor(int statusCode) => statusCode switch
+    private static string RfcSectionFor(int statusCode) => statusCode switch
     {
-        400 => 1,
-        401 => 2,
-        403 => 4,
-        404 => 5,
-        409 => 10,
-        _ => 1
+        400 => "15.5.1",
+        401 => "15.5.2",
+        403 => "15.5.4",
+        404 => "15.5.5",
+        409 => "15.5.10",
+        500 => "15.6.1",
+        503 => "15.6.4",
+        _ => "15.5.1"
     };
 }

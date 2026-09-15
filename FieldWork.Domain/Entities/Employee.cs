@@ -6,6 +6,7 @@ public class Employee
     public Guid UserId { get; set; }
     public User User { get; set; } = null!;
     public Guid TenantId { get; set; }
+    public FaceEmbedding? FaceEmbedding { get; set; }
     public string EmployeeCode { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string? LastName { get; set; }

@@ -28,5 +28,8 @@ public class TenantConfiguration : IEntityTypeConfiguration<Tenant>
 
         builder.Property(x => x.CreatedAt)
             .IsRequired();
+
+        builder.Property(x => x.FaceVerificationRequired)
+    .IsRequired();
     }
 }

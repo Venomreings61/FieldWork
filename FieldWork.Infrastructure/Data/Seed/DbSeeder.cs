@@ -2,6 +2,8 @@
 using FieldWork.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using FieldWork.Application.Security;
+using NetTopologySuite.Geometries;
+using NetTopologySuite;
 
 namespace FieldWork.Infrastructure.Seed;
 
@@ -13,6 +15,20 @@ public static class DbSeeder
     {
         var now = DateTimeOffset.UtcNow;
         var defaultPasswordHash = passwordHasher.Hash("Password@123");
+
+        var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+        Polygon CreateSquarePolygon(double minLng, double minLat, double maxLng, double maxLat)
+        {
+            var ring = geometryFactory.CreateLinearRing(new[]
+            {
+                new Coordinate(minLng, minLat),
+                new Coordinate(maxLng, minLat),
+                new Coordinate(maxLng, maxLat),
+                new Coordinate(minLng, maxLat),
+                new Coordinate(minLng, minLat)
+            });
+            return geometryFactory.CreatePolygon(ring);
+        }
 
         // ============================================================
         // TENANT A - DEMO DATA
@@ -61,7 +77,7 @@ public static class DbSeeder
             {
                 Id = Guid.NewGuid(),
                 UserId = userA.Id,
-                TenantId = tenantA.Id,   // ADD THIS LINE
+                TenantId = tenantA.Id,
                 EmployeeCode = "EMP001",
                 FirstName = "Demo",
                 LastName = "Employee",
@@ -72,7 +88,6 @@ public static class DbSeeder
             db.Employees.Add(employeeA);
         }
 
-        // FIX 1: scope by TenantId + Code, not Code alone
         var beatA = await db.Beats
             .FirstOrDefaultAsync(x => x.TenantId == tenantA.Id && x.Code == "BEAT001");
         if (beatA is null)
@@ -83,13 +98,15 @@ public static class DbSeeder
                 TenantId = tenantA.Id,
                 Name = "Demo Beat",
                 Code = "BEAT001",
-                CenterLatitude = 19.0760m,
-                CenterLongitude = 72.8777m,
-                RadiusMeters = 500,
+                BoundaryPolygon = CreateSquarePolygon(72.8758, 19.0742, 72.8796, 19.0778),
                 IsActive = true,
                 CreatedAt = now
             };
             db.Beats.Add(beatA);
+        }
+        else
+        {
+            beatA.BoundaryPolygon ??= CreateSquarePolygon(72.8758, 19.0742, 72.8796, 19.0778);
         }
 
         var employeeBeatA = await db.EmployeeBeats
@@ -106,6 +123,48 @@ public static class DbSeeder
                 AssignedTo = null,
                 IsActive = true
             });
+        }
+
+        // --- Tenant A: Second Employee (Authorization Testing) ---
+        var userA3 = await db.Users.FirstOrDefaultAsync(x => x.Username == "employee03");
+        if (userA3 is null)
+        {
+            userA3 = new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantA.Id,
+                Username = "employee03",
+                Email = "employee03@fieldwork.local",
+                PasswordHash = defaultPasswordHash,
+                Role = "Employee",
+                IsActive = true,
+                CreatedAt = now
+            };
+            db.Users.Add(userA3);
+        }
+        else
+        {
+            userA3.TenantId = tenantA.Id;
+            userA3.PasswordHash = defaultPasswordHash;
+            userA3.IsActive = true;
+        }
+
+        var employeeA3 = await db.Employees.FirstOrDefaultAsync(x => x.UserId == userA3.Id);
+        if (employeeA3 is null)
+        {
+            employeeA3 = new Employee
+            {
+                Id = Guid.NewGuid(),
+                UserId = userA3.Id,
+                TenantId = tenantA.Id,
+                EmployeeCode = "EMP003",
+                FirstName = "Second",
+                LastName = "Employee",
+                PhoneNumber = "7777777777",
+                IsActive = true,
+                CreatedAt = now
+            };
+            db.Employees.Add(employeeA3);
         }
 
         var adminUser = await db.Users.FirstOrDefaultAsync(x => x.Username == "admin");
@@ -181,7 +240,7 @@ public static class DbSeeder
             {
                 Id = Guid.NewGuid(),
                 UserId = userB.Id,
-                TenantId = tenantB.Id,   // ADD THIS LINE
+                TenantId = tenantB.Id,
                 EmployeeCode = "EMP002",
                 FirstName = "TenantB",
                 LastName = "Employee",
@@ -192,7 +251,6 @@ public static class DbSeeder
             db.Employees.Add(employeeB);
         }
 
-        // FIX 1: scope by TenantId + Code, not Code alone
         var beatB = await db.Beats
             .FirstOrDefaultAsync(x => x.TenantId == tenantB.Id && x.Code == "BEAT002");
         if (beatB is null)
@@ -203,17 +261,17 @@ public static class DbSeeder
                 TenantId = tenantB.Id,
                 Name = "Tenant B Beat",
                 Code = "BEAT002",
-                CenterLatitude = 12.9716m,
-                CenterLongitude = 77.5946m,
-                RadiusMeters = 500,
+                BoundaryPolygon = CreateSquarePolygon(77.5928, 12.9698, 77.5964, 12.9734),
                 IsActive = true,
                 CreatedAt = now
             };
             db.Beats.Add(beatB);
         }
+        else
+        {
+            beatB.BoundaryPolygon ??= CreateSquarePolygon(77.5928, 12.9698, 77.5964, 12.9734);
+        }
 
-        // FIX 2: assign employeeB to beatB, mirroring Tenant A's structure
-        // ↓↓↓ ADD THIS NEW BLOCK ↓↓↓
         var employeeBeatB = await db.EmployeeBeats
             .FirstOrDefaultAsync(x =>
                 x.EmployeeId == employeeB.Id &&
@@ -231,9 +289,30 @@ public static class DbSeeder
                 IsActive = true
             });
         }
-        // ↑↑↑ ADD THIS NEW BLOCK ↑↑↑
 
-
+        var adminUserB = await db.Users.FirstOrDefaultAsync(x => x.Username == "admin02");
+        if (adminUserB is null)
+        {
+            adminUserB = new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantB.Id,
+                Username = "admin02",
+                Email = "admin02@tenantb.local",
+                PasswordHash = defaultPasswordHash,
+                Role = "Admin",
+                IsActive = true,
+                CreatedAt = now
+            };
+            db.Users.Add(adminUserB);
+        }
+        else
+        {
+            adminUserB.TenantId = tenantB.Id;
+            adminUserB.PasswordHash = defaultPasswordHash;
+            adminUserB.Role = "Admin";
+            adminUserB.IsActive = true;
+        }
 
         await db.SaveChangesAsync();
     }

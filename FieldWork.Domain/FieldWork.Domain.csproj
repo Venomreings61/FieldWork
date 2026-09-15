@@ -4,6 +4,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+	  <!-- FieldWork.Domain.csproj — the Polygon type itself lives on the entity -->
+	  
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NetTopologySuite" Version="2.5.0" />
+    <PackageReference Include="Pgvector" Version="0.3.2" />
+  </ItemGroup>
+
 
 </Project>
