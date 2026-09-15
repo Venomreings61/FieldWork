@@ -27,5 +27,33 @@ jobs:
       - name: Build
         run: dotnet build FieldWork.slnx --configuration Release --no-restore
 
+      - name: Start integration test dependencies
+        env:
+          POSTGRES_PASSWORD: fieldwork_dev_pw
+          JWT_SECRET_KEY: ci-test-secret-key-change-me
+        run: |
+          docker compose up -d --build db face-service
+
+          echo "Waiting for PostgreSQL and face service..."
+
+          for i in {1..60}; do
+            DB_STATUS=$(docker inspect --format='{{.State.Health.Status}}' fieldwork-db 2>/dev/null || true)
+            FACE_STATUS=$(docker inspect --format='{{.State.Health.Status}}' fieldwork-face-service 2>/dev/null || true)
+
+            echo "PostgreSQL: $DB_STATUS | Face service: $FACE_STATUS"
+
+            if [ "$DB_STATUS" = "healthy" ] && [ "$FACE_STATUS" = "healthy" ]; then
+              echo "Both services are healthy."
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Timed out waiting for integration test dependencies."
+          docker compose ps
+          docker compose logs db face-service
+          exit 1
+
       - name: Test
         run: dotnet test FieldWork.slnx --configuration Release --no-build
