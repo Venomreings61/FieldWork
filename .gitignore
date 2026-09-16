@@ -29,3 +29,7 @@ FieldWork.Api/appsettings.Development.json
 enroll-payload.json
 face-openapi.json
 payload*.json
+
+# Tracked integration-test image fixtures
+!FieldWork.Tests/TestData/
+!FieldWork.Tests/TestData/*.png
