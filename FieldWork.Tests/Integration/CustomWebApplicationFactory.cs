@@ -20,15 +20,12 @@ namespace FieldWork.Tests.Integration
                 logging.ClearProviders();
             });
 
-            // Integration tests run from the host machine.
-            // The Docker Compose service name "face-service" is only
-            // resolvable inside the Docker network.
-            // Therefore tests connect to the published host port.
             builder.ConfigureAppConfiguration((context, config) =>
             {
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["FaceService:BaseUrl"] = "http://localhost:8500"
+                    ["FaceService:BaseUrl"] = "http://localhost:8500",
+                    ["Seed:Enabled"] = "true"
                 });
             });
 
@@ -46,8 +43,6 @@ namespace FieldWork.Tests.Integration
                     services.Remove(descriptor);
                 }
 
-                // Integration tests use the real PostgreSQL/PostGIS instance
-                // exposed by Docker on localhost:5433.
                 var testConnectionString =
                     "Host=localhost;Port=5433;Database=fieldwork;Username=fieldwork;Password=fieldwork_dev_pw;";
 
@@ -60,6 +55,19 @@ namespace FieldWork.Tests.Integration
                     });
                 });
             });
+        }
+
+        // Ensure database migrations and seeding run as soon as the WebApplicationFactory starts up
+        public CustomWebApplicationFactory()
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<FieldWorkDbContext>();
+
+            // Apply migrations so 'users', 'employees', etc. are created
+            db.Database.Migrate();
+
+            // Optional: If you have a custom seeder method, call it here, 
+            // e.g., DbSeeder.SeedAsync(db).GetAwaiter().GetResult();
         }
     }
 }
