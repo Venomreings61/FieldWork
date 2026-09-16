@@ -41,10 +41,15 @@ public static class DbSeeder
                 Id = Guid.NewGuid(),
                 Name = "FieldWork Demo",
                 Code = "FIELDWORK",
+                FaceVerificationRequired = true, // <--- ADD THIS LINE
                 IsActive = true,
                 CreatedAt = now
             };
             db.Tenants.Add(tenantA);
+        }
+        else
+        {
+            tenantA.FaceVerificationRequired = true; // <--- UPDATE IT HERE TOO IF IT ALREADY EXISTS
         }
 
         var userA = await db.Users.FirstOrDefaultAsync(x => x.Username == "employee01");
