@@ -57,7 +57,7 @@ jobs:
 
 
             - name: Verify integration test dependencies
-        run: |
+        
           echo "=== Docker Compose status ==="
           docker compose ps
 
