@@ -1,98 +1,4 @@
-name: Production CD
-
-on:
-  push:
-    branches: [ main ]
-
-permissions:
-  contents: read
-  id-token: write
-
-env:
-  AWS_REGION: ap-south-1
-  ALB_DNS: fieldwork-alb-449887616.ap-south-1.elb.amazonaws.com
-  ECR_API_REPO: fieldwork-api
-  ECR_FACE_REPO: fieldwork-face-service
-  ECS_CLUSTER: fieldwork-cluster
-  API_SERVICE: fieldwork-api
-  FACE_SERVICE: fieldwork-face-service
-
-jobs:
-  deploy:
-    name: Build, Push & Deploy to ECS Fargate
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Authenticate with AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and Push API Image
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -f FieldWork.Api/Dockerfile -t $REGISTRY/$ECR_API_REPO:$IMAGE_TAG .
-          docker push $REGISTRY/$ECR_API_REPO:$IMAGE_TAG
-
-      - name: Build and Push Face Service Image
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -f face-service/Dockerfile -t $REGISTRY/$ECR_FACE_REPO:$IMAGE_TAG face-service
-          docker push $REGISTRY/$ECR_FACE_REPO:$IMAGE_TAG
-
-      - name: Render API Task Definition
-        id: render-api
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition-family: fieldwork-api
-          container-name: api
-          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_API_REPO }}:${{ github.sha }}
-
-      - name: Deploy API to ECS Service
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.render-api.outputs.task-definition }}
-          service: ${{ env.API_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
-
-      - name: Render Face Service Task Definition
-        id: render-face
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition-family: fieldwork-face-service
-          container-name: face-service
-          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FACE_REPO }}:${{ github.sha }}
-
-      - name: Deploy Face Service to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.render-face.outputs.task-definition }}
-          service: ${{ env.FACE_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
-
-      - name: Verify Service Stability
-        run: |
-          aws ecs wait services-stable \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.API_SERVICE }} ${{ env.FACE_SERVICE }} \
-            --region ${{ env.AWS_REGION }}
-          echo "All ECS services are stable and healthy."
-
-      - name: Run Automated AWS Deployment Tests
+- name: Run Automated AWS Deployment Tests
         env:
           TEST_USERNAME: ${{ secrets.TEST_API_USERNAME }}
           TEST_PASSWORD: ${{ secrets.TEST_API_PASSWORD }}
@@ -108,24 +14,38 @@ jobs:
           fi
           echo "ALB Readiness: PASS"
 
-          # 2. Authentication Login (/api/Auth/login) with Diagnostics
+          # 2. Authentication Login (/api/Auth/login) with Robust Diagnostics & jq
           echo "Testing Authentication..."
-          LOGIN_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://${{ env.ALB_DNS }}/api/Auth/login \
-            -H "Content-Type: application/json" \
-            -d "{\"username\": \"$TEST_USERNAME\", \"password\": \"$TEST_PASSWORD\"}")
+          LOGIN_BODY_FILE=$(mktemp)
           
-          HTTP_CODE=$(echo "$LOGIN_RESPONSE" | tail -n1)
-          BODY=$(echo "$LOGIN_RESPONSE" | sed '$d')
+          HTTP_CODE=$(curl -sS \
+            -o "$LOGIN_BODY_FILE" \
+            -w "%{http_code}" \
+            -X POST "http://${{ env.ALB_DNS }}/api/Auth/login" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"$TEST_USERNAME\",\"password\":\"$TEST_PASSWORD\"}")
+
+          echo "Login HTTP Status: $HTTP_CODE"
 
           if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "❌ Login failed!"
-            echo "➡️ HTTP Status Code: $HTTP_CODE"
-            echo "➡️ API Response Body: $BODY"
+            echo "❌ Login failed."
+            echo "➡️ API Response Body:"
+            cat "$LOGIN_BODY_FILE"
+            rm -f "$LOGIN_BODY_FILE"
+            exit 1
+          fi
+
+          BODY=$(cat "$LOGIN_BODY_FILE")
+          rm -f "$LOGIN_BODY_FILE"
+
+          # Parse token safely via jq
+          TOKEN=$(echo "$BODY" | jq -r '.token // empty')
+          if [ -z "$TOKEN" ]; then
+            echo "❌ Login returned HTTP 200 but no token was found in the response body."
+            echo "➡️ Response was: $BODY"
             exit 1
           fi
           
-          # Extract token securely (masking from logs)
-          TOKEN=$(echo "$BODY" | grep -o '"token":"[^"]*' | grep -o '[^"]*$')
           echo "Authentication: PASS"
 
           # 3. Authenticated /api/Auth/me Check
