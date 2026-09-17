@@ -108,7 +108,7 @@ jobs:
           fi
           echo "ALB Readiness: PASS"
 
-          # 2. Authentication Login (/api/Auth/login)
+          # 2. Authentication Login (/api/Auth/login) with Diagnostics
           echo "Testing Authentication..."
           LOGIN_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://${{ env.ALB_DNS }}/api/Auth/login \
             -H "Content-Type: application/json" \
@@ -118,7 +118,9 @@ jobs:
           BODY=$(echo "$LOGIN_RESPONSE" | sed '$d')
 
           if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "Login failed with status code $HTTP_CODE"
+            echo "❌ Login failed!"
+            echo "➡️ HTTP Status Code: $HTTP_CODE"
+            echo "➡️ API Response Body: $BODY"
             exit 1
           fi
           
