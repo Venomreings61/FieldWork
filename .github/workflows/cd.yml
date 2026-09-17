@@ -35,13 +35,6 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Debug Folder Structure
-        run: |
-          echo "=== Root Contents ==="
-          ls -la
-          echo "=== Finding csproj paths ==="
-          find . -name "*.csproj"
-
       - name: Build and Push API Image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -58,12 +51,16 @@ jobs:
           docker build -f face-service/Dockerfile -t $REGISTRY/$ECR_FACE_REPO:$IMAGE_TAG face-service
           docker push $REGISTRY/$ECR_FACE_REPO:$IMAGE_TAG
 
-      - name: Download & Update API Task Definition
+      - name: Download Active API Task Definition
+        run: |
+          aws ecs describe-task-definition --task-definition ${{ env.API_SERVICE }} --query taskDefinition > task-def-api.json
+
+      - name: Render API Task Definition
         id: render-api
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: fieldwork-api
-          container-name: fieldwork-api
+          task-definition-file: task-def-api.json
+          container-name: ${{ env.API_SERVICE }}
           image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_API_REPO }}:${{ github.sha }}
 
       - name: Deploy API to ECS Service
@@ -74,12 +71,16 @@ jobs:
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
 
-      - name: Download & Update Face Service Task Definition
+      - name: Download Active Face Service Task Definition
+        run: |
+          aws ecs describe-task-definition --task-definition ${{ env.FACE_SERVICE }} --query taskDefinition > task-def-face.json
+
+      - name: Render Face Service Task Definition
         id: render-face
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: fieldwork-face-service
-          container-name: fieldwork-face-service
+          task-definition-file: task-def-face.json
+          container-name: ${{ env.FACE_SERVICE }}
           image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FACE_REPO }}:${{ github.sha }}
 
       - name: Deploy Face Service to ECS
