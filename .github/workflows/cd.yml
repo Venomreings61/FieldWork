@@ -119,7 +119,7 @@ jobs:
             -d "{\"username\": \"$TEST_USERNAME\", \"password\": \"$TEST_PASSWORD\"}")
           
           HTTP_CODE=$(echo "$LOGIN_RESPONSE" | tail -n1)
-          BODY=$(echo "$LOGIN_RESPONSE" | sed '$d')
+          BODY=$(echo "$LOGIN_Response" | sed '$d')
 
           if [ "$HTTP_CODE" -ne 200 ]; then
             echo "Login failed with status code $HTTP_CODE"
