@@ -10,6 +10,7 @@ permissions:
 
 env:
   AWS_REGION: ap-south-1
+  ALB_DNS: fieldwork-alb-449887616.ap-south-1.elb.amazonaws.com
   ECR_API_REPO: fieldwork-api
   ECR_FACE_REPO: fieldwork-face-service
   ECS_CLUSTER: fieldwork-cluster
@@ -96,16 +97,11 @@ jobs:
           TEST_USERNAME: ${{ secrets.TEST_API_USERNAME }}
           TEST_PASSWORD: ${{ secrets.TEST_API_PASSWORD }}
         run: |
-          echo "Discovering ALB DNS name..."
-          TG_ARN=$(aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.API_SERVICE }} --query "services[0].loadBalancers[0].targetGroupArn" --output text)
-          LB_ARN=$(aws elbv2 describe-target-groups --target-group-arns $TG_ARN --query "targetGroups[0].loadBalancerArns[0]" --output text)
-          ALB_DNS=$(aws elbv2 describe-load-balancers --load-balancer-arns $LB_ARN --query "loadBalancers[0].dnsName" --output text)
-          
-          echo "Target ALB: http://$ALB_DNS"
+          echo "Target ALB: http://${{ env.ALB_DNS }}"
           
           # 1. ALB Health Check (/health/ready)
           echo "Checking /health/ready..."
-          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$ALB_DNS/health/ready)
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ env.ALB_DNS }}/health/ready)
           if [ "$HEALTH_STATUS" -ne 200 ]; then
             echo "Health check failed with status $HEALTH_STATUS"
             exit 1
@@ -114,12 +110,12 @@ jobs:
 
           # 2. Authentication Login (/api/Auth/login)
           echo "Testing Authentication..."
-          LOGIN_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://$ALB_DNS/api/Auth/login \
+          LOGIN_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://${{ env.ALB_DNS }}/api/Auth/login \
             -H "Content-Type: application/json" \
             -d "{\"username\": \"$TEST_USERNAME\", \"password\": \"$TEST_PASSWORD\"}")
           
           HTTP_CODE=$(echo "$LOGIN_RESPONSE" | tail -n1)
-          BODY=$(echo "$LOGIN_Response" | sed '$d')
+          BODY=$(echo "$LOGIN_RESPONSE" | sed '$d')
 
           if [ "$HTTP_CODE" -ne 200 ]; then
             echo "Login failed with status code $HTTP_CODE"
@@ -132,7 +128,7 @@ jobs:
 
           # 3. Authenticated /api/Auth/me Check
           echo "Testing /api/Auth/me..."
-          ME_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" http://$ALB_DNS/api/Auth/me)
+          ME_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" http://${{ env.ALB_DNS }}/api/Auth/me)
           if [ "$ME_STATUS" -ne 200 ]; then
             echo "/api/Auth/me failed with status $ME_STATUS"
             exit 1
@@ -143,7 +139,7 @@ jobs:
           echo "Testing Face Verification via Service Connect..."
           TEST_IMAGE="FieldWork.Tests/TestData/personA_1.png"
           if [ -f "$TEST_IMAGE" ]; then
-            FACE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://$ALB_DNS/api/Face/verify \
+            FACE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://${{ env.ALB_DNS }}/api/Face/verify \
               -H "Authorization: Bearer $TOKEN" \
               -F "image=@$TEST_IMAGE")
             
