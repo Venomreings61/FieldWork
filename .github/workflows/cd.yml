@@ -51,15 +51,11 @@ jobs:
           docker build -f face-service/Dockerfile -t $REGISTRY/$ECR_FACE_REPO:$IMAGE_TAG face-service
           docker push $REGISTRY/$ECR_FACE_REPO:$IMAGE_TAG
 
-      - name: Download Active API Task Definition
-        run: |
-          aws ecs describe-task-definition --task-definition ${{ env.API_SERVICE }} --query taskDefinition > task-def-api.json
-
       - name: Render API Task Definition
         id: render-api
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition-file: task-def-api.json
+          task-definition-family: fieldwork-api
           container-name: ${{ env.API_SERVICE }}
           image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_API_REPO }}:${{ github.sha }}
 
@@ -71,15 +67,11 @@ jobs:
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
 
-      - name: Download Active Face Service Task Definition
-        run: |
-          aws ecs describe-task-definition --task-definition ${{ env.FACE_SERVICE }} --query taskDefinition > task-def-face.json
-
       - name: Render Face Service Task Definition
         id: render-face
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition-file: task-def-face.json
+          task-definition-family: fieldwork-face-service
           container-name: ${{ env.FACE_SERVICE }}
           image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FACE_REPO }}:${{ github.sha }}
 
