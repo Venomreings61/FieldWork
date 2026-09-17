@@ -35,6 +35,13 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Debug Folder Structure
+        run: |
+          echo "=== Root Contents ==="
+          ls -la
+          echo "=== Finding csproj paths ==="
+          find . -name "*.csproj"
+
       - name: Build and Push API Image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
