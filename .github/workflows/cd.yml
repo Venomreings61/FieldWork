@@ -90,3 +90,88 @@ jobs:
             --services ${{ env.API_SERVICE }} ${{ env.FACE_SERVICE }} \
             --region ${{ env.AWS_REGION }}
           echo "All ECS services are stable and healthy."
+
+      - name: Run Automated AWS Deployment Tests
+        env:
+          TEST_USERNAME: ${{ secrets.TEST_API_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.TEST_API_PASSWORD }}
+        run: |
+          echo "Discovering ALB DNS name..."
+          TG_ARN=$(aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.API_SERVICE }} --query "services[0].loadBalancers[0].targetGroupArn" --output text)
+          LB_ARN=$(aws elbv2 describe-target-groups --target-group-arns $TG_ARN --query "targetGroups[0].loadBalancerArns[0]" --output text)
+          ALB_DNS=$(aws elbv2 describe-load-balancers --load-balancer-arns $LB_ARN --query "loadBalancers[0].dnsName" --output text)
+          
+          echo "Target ALB: http://$ALB_DNS"
+          
+          # 1. ALB Health Check (/health/ready)
+          echo "Checking /health/ready..."
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$ALB_DNS/health/ready)
+          if [ "$HEALTH_STATUS" -ne 200 ]; then
+            echo "Health check failed with status $HEALTH_STATUS"
+            exit 1
+          fi
+          echo "ALB Readiness: PASS"
+
+          # 2. Authentication Login (/api/Auth/login)
+          echo "Testing Authentication..."
+          LOGIN_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://$ALB_DNS/api/Auth/login \
+            -H "Content-Type: application/json" \
+            -d "{\"username\": \"$TEST_USERNAME\", \"password\": \"$TEST_PASSWORD\"}")
+          
+          HTTP_CODE=$(echo "$LOGIN_RESPONSE" | tail -n1)
+          BODY=$(echo "$LOGIN_RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "Login failed with status code $HTTP_CODE"
+            exit 1
+          fi
+          
+          # Extract token securely (masking from logs)
+          TOKEN=$(echo "$BODY" | grep -o '"token":"[^"]*' | grep -o '[^"]*$')
+          echo "Authentication: PASS"
+
+          # 3. Authenticated /api/Auth/me Check
+          echo "Testing /api/Auth/me..."
+          ME_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" http://$ALB_DNS/api/Auth/me)
+          if [ "$ME_STATUS" -ne 200 ]; then
+            echo "/api/Auth/me failed with status $ME_STATUS"
+            exit 1
+          fi
+          echo "Auth/me: PASS"
+
+          # 4. Automated Face Verification Test
+          echo "Testing Face Verification via Service Connect..."
+          TEST_IMAGE="FieldWork.Tests/TestData/personA_1.png"
+          if [ -f "$TEST_IMAGE" ]; then
+            FACE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://$ALB_DNS/api/Face/verify \
+              -H "Authorization: Bearer $TOKEN" \
+              -F "image=@$TEST_IMAGE")
+            
+            FACE_CODE=$(echo "$FACE_RESPONSE" | tail -n1)
+            FACE_BODY=$(echo "$FACE_RESPONSE" | sed '$d')
+
+            if [ "$FACE_CODE" -eq 200 ] && echo "$FACE_BODY" | grep -q "true"; then
+              FACE_VERIFY_STATUS="PASS"
+            else
+              echo "Face verification response: $FACE_BODY"
+              FACE_VERIFY_STATUS="FAIL"
+              exit 1
+            fi
+          else
+            echo "Test image not found at $TEST_IMAGE, skipping automated face payload check."
+            FACE_VERIFY_STATUS="SKIPPED"
+          fi
+
+          # Print Portfolio Summary Block
+          echo "================================="
+          echo "FieldWork AWS Deployment Test"
+          echo "================================="
+          echo "ECS API              PASS"
+          echo "ECS Face Service     PASS"
+          echo "ALB readiness        PASS"
+          echo "Authentication       PASS"
+          echo "Auth/me              PASS"
+          echo "Face verification    $FACE_VERIFY_STATUS"
+          echo ""
+          echo "Deployment successful."
+          echo "================================="
