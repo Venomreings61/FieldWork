@@ -40,7 +40,7 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -f FieldWork.Api/Dockerfile -t $REGISTRY/$ECR_API_REPO:$IMAGE_TAG .
+          docker build -f FieldWork.Api/Dockerfile -t $REGISTRY/$ECR_API_REPO:$IMAGE_TAG FieldWork.Api
           docker push $REGISTRY/$ECR_API_REPO:$IMAGE_TAG
 
       - name: Build and Push Face Service Image
@@ -48,7 +48,7 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -f face-service/Dockerfile -t $REGISTRY/$ECR_FACE_REPO:$IMAGE_TAG face-service/
+          docker build -f face-service/Dockerfile -t $REGISTRY/$ECR_FACE_REPO:$IMAGE_TAG face-service
           docker push $REGISTRY/$ECR_FACE_REPO:$IMAGE_TAG
 
       - name: Download & Update API Task Definition
