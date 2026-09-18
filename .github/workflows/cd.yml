@@ -165,7 +165,7 @@ jobs:
             -w "%{http_code}" \
             --connect-timeout 10 \
             --max-time 60 \
-            -X POST "http://${{ env.ALB_DNS }}/api/Face/verify" \
+            -X POST "http://${{ env.ALB_DNS }}/api/v1/employees/dbd69e26-ca95-4cad-9dae-229ef070450b/face/verify" \
             -H "Authorization: Bearer $TOKEN" \
             -F "image=@$TEST_IMAGE")
 
