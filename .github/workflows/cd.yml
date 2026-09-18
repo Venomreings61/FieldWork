@@ -151,27 +151,46 @@ jobs:
           fi
           echo "Auth/me: PASS"
 
-          # 4. Automated Face Verification Test
+          # 4. Automated Face Verification Test with Diagnostics
           echo "Testing Face Verification via Service Connect..."
           TEST_IMAGE="FieldWork.Tests/TestData/personA_1.png"
-          if [ -f "$TEST_IMAGE" ]; then
-            FACE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://${{ env.ALB_DNS }}/api/Face/verify \
-              -H "Authorization: Bearer $TOKEN" \
-              -F "image=@$TEST_IMAGE")
-            
-            FACE_CODE=$(echo "$FACE_RESPONSE" | tail -n1)
-            FACE_BODY=$(echo "$FACE_RESPONSE" | sed '$d')
+          if [ ! -f "$TEST_IMAGE" ]; then
+            echo "❌ Test image not found at $TEST_IMAGE"
+            exit 1
+          fi
 
-            if [ "$FACE_CODE" -eq 200 ] && echo "$FACE_BODY" | grep -q "true"; then
-              FACE_VERIFY_STATUS="PASS"
-            else
-              echo "Face verification response: $FACE_BODY"
-              FACE_VERIFY_STATUS="FAIL"
-              exit 1
-            fi
+          FACE_BODY_FILE=$(mktemp)
+          FACE_CODE=$(curl -sS \
+            -o "$FACE_BODY_FILE" \
+            -w "%{http_code}" \
+            --connect-timeout 10 \
+            --max-time 60 \
+            -X POST "http://${{ env.ALB_DNS }}/api/Face/verify" \
+            -H "Authorization: Bearer $TOKEN" \
+            -F "image=@$TEST_IMAGE")
+
+          echo "Face verification HTTP Status: $FACE_CODE"
+
+          if [ "$FACE_CODE" -ne 200 ]; then
+            echo "❌ Face verification request failed."
+            echo "➡️ Response body:"
+            cat "$FACE_BODY_FILE"
+            rm -f "$FACE_BODY_FILE"
+            exit 1
+          fi
+
+          FACE_BODY=$(cat "$FACE_BODY_FILE")
+          rm -f "$FACE_BODY_FILE"
+
+          echo "Face verification response received."
+          if echo "$FACE_BODY" | jq -e '.matched == true' > /dev/null; then
+            FACE_VERIFY_STATUS="PASS"
           else
-            echo "Test image not found at $TEST_IMAGE, skipping automated face payload check."
-            FACE_VERIFY_STATUS="SKIPPED"
+            echo "❌ Face verification did not return matched=true."
+            echo "➡️ Response body:"
+            echo "$FACE_BODY"
+            FACE_VERIFY_STATUS="FAIL"
+            exit 1
           fi
 
           # Print Portfolio Summary Block
