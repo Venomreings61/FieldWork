@@ -132,10 +132,10 @@ jobs:
           BODY=$(cat "$LOGIN_BODY_FILE")
           rm -f "$LOGIN_BODY_FILE"
 
-          # Parse token safely via jq
-          TOKEN=$(echo "$BODY" | jq -r '.token // empty')
+          # Parse access token safely via jq
+          TOKEN=$(echo "$BODY" | jq -r '.accessToken // empty')
           if [ -z "$TOKEN" ]; then
-            echo "❌ Login returned HTTP 200 but no token was found in the response body."
+            echo "❌ Login returned HTTP 200 but no accessToken was found in the response body."
             echo "➡️ Response was: $BODY"
             exit 1
           fi
